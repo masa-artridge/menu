@@ -1,0 +1,1455 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f3a6e">
+<meta name="mobile-web-app-capable" content="yes">
+<script>
+  // お客さま用（?m）のときは「ホーム画面に追加」を出さない
+  if (!/[?&]m(=|&|$)/.test(location.search)) document.write('<link rel="manifest" href="manifest.json">');
+</script>
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>多言語メニュー</title>
+<style id="page-style">@page{size:A4;margin:10mm}</style>
+<style>
+:root{
+  --bg:#f4f3ef; --card:#fff; --ink:#1f2328; --sub:#5d6670; --line:#e3e1db; --soft:#f7f6f2;
+  --pri:#1f3a6e; --pri-weak:#e6ecf7; --ok:#14804a; --ok-weak:#e3f4ea; --bad:#c42e2e; --bad-weak:#fdebeb;
+  --warn:#965a00; --warn-weak:#fff3dd; --nav:#1b2a44; --r:12px;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{font-family:system-ui,-apple-system,"Noto Sans JP","Noto Sans CJK JP","Hiragino Sans","Yu Gothic UI",sans-serif;background:var(--bg);color:var(--ink);font-size:16px;line-height:1.55;-webkit-tap-highlight-color:transparent}
+button,input,select,textarea{font:inherit;color:inherit}
+svg.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+#app{display:flex;min-height:100vh}
+#print{display:none}
+/* ---- サイドメニュー（横長） ---- */
+.side{width:190px;flex-shrink:0;background:var(--nav);color:#fff;position:sticky;top:0;height:100vh;overflow-y:auto;padding:calc(14px + env(safe-area-inset-top)) 10px 14px calc(10px + env(safe-area-inset-left))}
+.side .brand{font-weight:700;font-size:17px;padding:6px 10px 14px;line-height:1.3;word-break:break-all}
+.side .brand small{display:block;font-weight:400;font-size:12px;opacity:.7;margin-top:2px}
+.side button{display:flex;align-items:center;gap:10px;width:100%;border:0;background:none;color:#d3dbea;padding:12px;border-radius:10px;font-size:16px;text-align:left;cursor:pointer;min-height:48px;position:relative}
+.side button.on{background:#33476b;color:#fff;font-weight:700}
+.side hr{border:0;border-top:1px solid #33476b;margin:10px 4px}
+.dotw{width:9px;height:9px;border-radius:50%;background:#ffb020;position:absolute;right:12px;top:50%;margin-top:-4px}
+/* ---- 下のメニュー（縦長） ---- */
+.bottom{display:none;position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--nav);padding:4px 4px calc(4px + env(safe-area-inset-bottom))}
+.bottom button{flex:1;border:0;background:none;color:#cbd5e6;font-size:11px;padding:6px 0 4px;display:flex;flex-direction:column;align-items:center;gap:2px;border-radius:8px;min-height:54px;cursor:pointer;min-width:0;position:relative}
+.bottom button.on{color:#fff;background:#33476b;font-weight:700}
+.bottom .dotw{right:auto;left:50%;margin-left:9px;top:8px;margin-top:0}
+main{flex:1;min-width:0;padding:calc(14px + env(safe-area-inset-top)) calc(18px + env(safe-area-inset-right)) 40px 18px}
+@media (max-width:859px){
+  .side{display:none} .bottom{display:flex}
+  main{padding:calc(10px + env(safe-area-inset-top)) 12px 100px}
+}
+/* ---- 部品 ---- */
+.top{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.top h1{font-size:22px;margin:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.card{background:var(--card);border-radius:var(--r);padding:18px;box-shadow:0 1px 2px rgba(20,30,50,.08);margin-bottom:14px}
+.card h2{font-size:17px;margin:0 0 10px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.card h2 small{font-weight:400;font-size:13px;color:var(--sub)}
+.muted{color:var(--sub)} .small{font-size:13px}
+label.f{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--sub);margin:14px 0 5px;font-weight:600}
+.card>label.f:first-of-type{margin-top:0}
+.inp{width:100%;border:1px solid #cbd1d8;border-radius:10px;padding:10px 12px;background:#fff;min-height:48px;font-size:16px}
+textarea.inp{min-height:72px;resize:vertical;line-height:1.5}
+.inp:focus{outline:2px solid var(--pri);outline-offset:0;border-color:var(--pri)}
+.inp.sm{min-height:40px;padding:6px 10px;font-size:15px}
+.inp.num{text-align:right;font-weight:700}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid #cbd1d8;background:#fff;border-radius:10px;padding:10px 16px;min-height:48px;cursor:pointer;font-size:16px;font-weight:600;text-decoration:none;color:var(--ink);white-space:nowrap}
+.btn:disabled{opacity:.45;cursor:default}
+.btn.pri{background:var(--pri);color:#fff;border-color:var(--pri)}
+.btn.ok{background:var(--ok);color:#fff;border-color:var(--ok)}
+.btn.danger{background:var(--bad);color:#fff;border-color:var(--bad)}
+.btn.ghost{border-color:transparent;background:none;color:var(--pri)}
+.btn.sm{min-height:40px;padding:6px 12px;font-size:14px}
+.btn.wide{width:100%}
+.btn.dash{border:2px dashed #b3bfd3;color:var(--pri);background:#fafbfd}
+.btn svg.i{width:20px;height:20px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.row>.grow{flex:1 1 160px;min-width:0}
+.seg{display:flex;flex-wrap:wrap;gap:8px}
+.seg button{flex:1 1 auto;border:2px solid #cbd1d8;background:#fff;border-radius:10px;padding:8px 12px;min-height:48px;cursor:pointer;font-size:15px;font-weight:600}
+.seg button.on{border-color:var(--pri);background:var(--pri-weak);color:var(--pri)}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chips button{border:1px solid var(--line);background:var(--soft);border-radius:999px;padding:6px 14px;font-size:15px;cursor:pointer;min-height:42px}
+.chips button.on{background:var(--pri);border-color:var(--pri);color:#fff;font-weight:700}
+.chips.alg button.on{background:#b3261e;border-color:#b3261e}
+.note{background:var(--soft);border-radius:10px;padding:10px 14px;font-size:14px;color:var(--sub);margin-top:10px}
+.note.warn{background:var(--warn-weak);color:var(--warn)}
+.note.ok{background:var(--ok-weak);color:var(--ok)}
+.note.bad{background:var(--bad-weak);color:var(--bad)}
+.note.flex{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:space-between}
+.check{display:flex;align-items:center;gap:10px;min-height:44px;cursor:pointer;margin-top:4px}
+.check input{width:22px;height:22px;flex-shrink:0}
+.badge{display:inline-block;font-size:12px;padding:2px 8px;border-radius:999px;background:var(--pri-weak);color:var(--pri);white-space:nowrap;font-weight:600;vertical-align:middle}
+.badge.gray{background:#eceef1;color:var(--sub)}
+.badge.warn{background:var(--warn-weak);color:var(--warn)}
+.badge.red{background:var(--bad-weak);color:var(--bad)}
+.actbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.actbar.end{justify-content:flex-end;margin-top:6px}
+.actbar .sp{flex:1}
+.two{display:grid;gap:14px;grid-template-columns:1fr;align-items:start}
+@media (min-width:1020px){ .two{grid-template-columns:1fr 1fr} }
+.empty{text-align:center;color:var(--sub);padding:24px 10px}
+.search{position:relative;margin-bottom:14px}
+.search svg{position:absolute;left:12px;top:13px;color:var(--sub)}
+.search .inp{padding-left:42px}
+/* ---- メニュー一覧 ---- */
+.it{display:flex;align-items:center;gap:6px;border-top:1px solid var(--line);padding:8px 0}
+.grp h2+.it{border-top:0}
+.mv{display:flex;flex-direction:column;gap:2px}
+.mv button{width:40px;height:34px;border:1px solid var(--line);background:#fff;border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--sub)}
+.mv button:disabled{opacity:.25;cursor:default}
+.mv svg.i{width:18px;height:18px}
+.it-main{flex:1;min-width:0;display:flex;align-items:center;gap:12px;border:0;background:none;text-align:left;cursor:pointer;padding:4px;border-radius:10px;min-height:64px}
+.it-main:active{background:var(--soft)}
+.th{width:76px;height:56px;border-radius:8px;overflow:hidden;flex-shrink:0;background:#e9e9e6;display:block}
+.th img{width:100%;height:100%;object-fit:cover;display:block}
+.ph{width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:22px;opacity:.85}
+.it-tx{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.it-tx b{font-size:16px;line-height:1.3;overflow:hidden;text-overflow:ellipsis}
+.lbs{display:flex;gap:4px;flex-wrap:wrap}
+.lb{font-size:11px;font-weight:700;padding:0 6px;border-radius:5px;line-height:18px}
+.lb.ok{background:var(--ok-weak);color:var(--ok)}
+.lb.ng{background:#fff;color:var(--bad);border:1px dashed #e3a3a3}
+.pr{font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums}
+.sw{border:2px solid #cbd1d8;background:#fff;border-radius:10px;min-height:48px;padding:4px 10px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer;white-space:nowrap;min-width:84px}
+.sw.on{background:var(--bad);border-color:var(--bad);color:#fff}
+.it.sold .it-tx b{text-decoration:line-through;color:var(--sub)}
+.it.hid .th{opacity:.4}
+/* ---- 編集 ---- */
+.ed-grid{display:grid;gap:14px;grid-template-columns:1fr;align-items:start}
+@media (min-width:1020px){ .ed-grid{grid-template-columns:340px minmax(0,1fr)} }
+.photo{display:flex;align-items:center;justify-content:center;width:100%;aspect-ratio:4/3;border:2px dashed #b9c2cf;border-radius:12px;overflow:hidden;cursor:pointer;background:#fafbfc;text-align:center;color:var(--sub)}
+.photo img{width:100%;height:100%;object-fit:cover}
+.photo svg.i{width:36px;height:36px}
+.lgb{border-top:1px solid var(--line);padding:12px 0 4px}
+.lgb:first-of-type{border-top:0;padding-top:0}
+.lgb .lgh{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+.lgb .inp+.inp{margin-top:6px}
+.opt{border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:8px;background:var(--soft)}
+.opt .inp.num{width:120px;flex:0 0 120px}
+.opt-tr{display:grid;gap:6px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-top:6px}
+.subh{font-size:13px;font-weight:700;color:var(--sub);margin:12px 0 6px}
+/* ---- カテゴリ ---- */
+.crow{display:flex;align-items:center;gap:10px;border-top:1px solid var(--line);padding:10px 0}
+.crow:first-of-type{border-top:0}
+.crow .grow{flex:1;min-width:0}
+/* ---- 翻訳 ---- */
+.ttabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.ttabs button{border:2px solid #cbd1d8;background:#fff;border-radius:10px;padding:8px 14px;min-height:48px;font-weight:700;cursor:pointer}
+.ttabs button.on{border-color:var(--pri);background:var(--pri);color:#fff}
+.ttabs .cnt{display:inline-block;background:var(--bad);color:#fff;border-radius:999px;font-size:12px;padding:0 7px;margin-left:4px}
+.ttabs button.on .cnt{background:#fff;color:var(--bad)}
+.bar{height:10px;border-radius:5px;background:#e6e8ec;overflow:hidden;margin:6px 0 4px}
+.bar i{display:block;height:100%;background:var(--ok)}
+.tf{border-top:1px solid var(--line);padding:12px 0}
+.tf:first-of-type{border-top:0}
+.tf-h{font-size:13px;color:var(--sub);margin-bottom:4px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.tf-ja{font-weight:700;margin-bottom:6px;white-space:pre-wrap}
+.tf-in{display:flex;gap:8px;align-items:flex-start}
+.tf-in .inp{flex:1}
+/* ---- 設定 ---- */
+.mlrow{display:flex;gap:8px;align-items:flex-start;margin-bottom:6px}
+.mlrow .ml{width:56px;flex-shrink:0;font-size:12px;font-weight:700;color:var(--sub);padding-top:14px;text-align:right}
+.swatch{display:flex;gap:10px;flex-wrap:wrap}
+.swatch button{width:44px;height:44px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 0 1px #ccc;cursor:pointer}
+.swatch button.on{box-shadow:0 0 0 3px var(--ink)}
+/* ---- 印刷 ---- */
+.pr-grid{display:grid;gap:14px;grid-template-columns:1fr;align-items:start}
+@media (min-width:1100px){ .pr-grid{grid-template-columns:330px minmax(0,1fr)} }
+.pv-wrap{overflow:hidden;background:#d9d9d6;border-radius:12px;padding:12px}
+.paper{width:210mm;min-height:297mm;padding:10mm;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.18);margin:0 auto}
+.paper.pop-pv{padding:0}
+/* ---- QR・公開 ---- */
+.qrbig{width:min(320px,100%);margin:0 auto 10px}
+.qrbig svg{width:100%;height:auto;display:block}
+.url{text-align:center;word-break:break-all;font-size:14px;color:var(--sub);margin-bottom:12px}
+.step{display:flex;gap:12px;padding:12px 0;border-top:1px solid var(--line)}
+.step:first-of-type{border-top:0;padding-top:0}
+.step .n{width:30px;height:30px;border-radius:50%;background:var(--pri);color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.step .b{flex:1;min-width:0}
+details.more{margin-top:12px}
+details.more summary{cursor:pointer;font-weight:700;color:var(--pri);min-height:40px;display:flex;align-items:center}
+/* ---- モーダル・通知 ---- */
+#modal{position:fixed;inset:0;z-index:100;display:none;background:rgba(10,15,25,.5);align-items:center;justify-content:center;padding:16px}
+#modal.show{display:flex}
+#modal .box{background:#fff;border-radius:16px;padding:20px;width:min(560px,100%);max-height:92vh;overflow-y:auto}
+#modal .box h2{margin:0 0 12px;font-size:19px}
+#modal .box .btn.wide{margin-top:8px}
+#toast{position:fixed;left:50%;bottom:calc(84px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:200;background:#222;color:#fff;border-radius:12px;padding:12px 18px;display:none;align-items:center;gap:14px;box-shadow:0 4px 16px rgba(0,0,0,.25);max-width:92vw}
+#toast.show{display:flex}
+#toast button{background:none;border:0;color:#ffd166;font-weight:700;cursor:pointer;min-height:36px}
+
+/* =========================================================
+   お客さま表示（スマホ・タブレット共通）
+   ========================================================= */
+.vw{--c:#1f3a6e;width:100%;min-height:100vh;background:#f8f6f1;color:#222;font-family:system-ui,-apple-system,"Noto Sans JP","Noto Sans CJK JP",sans-serif}
+.vw.serif{font-family:"Noto Serif CJK JP","Noto Serif JP","Hiragino Mincho ProN","Yu Mincho",serif}
+.vh{position:sticky;top:0;z-index:20;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.vh-top{display:flex;align-items:center;gap:10px 14px;padding:calc(10px + env(safe-area-inset-top)) 16px 6px;max-width:1200px;margin:0 auto;flex-wrap:wrap}
+.vh-t{min-width:0}
+.vh h1{font-size:21px;margin:0;color:var(--c);line-height:1.25}
+.vh .vsub{font-size:12px;color:#777}
+.vlang{display:flex;gap:6px;overflow-x:auto;margin-left:auto;scrollbar-width:none;max-width:100%}
+.vlang button{border:1px solid #d6d6d6;background:#fff;border-radius:999px;padding:6px 14px;font-size:14px;white-space:nowrap;min-height:40px;cursor:pointer;font-family:system-ui,sans-serif}
+.vlang button.on{background:var(--c);border-color:var(--c);color:#fff;font-weight:700}
+.vcats{display:flex;gap:6px;overflow-x:auto;padding:4px 16px 10px;max-width:1200px;margin:0 auto;scrollbar-width:none}
+.vcats::-webkit-scrollbar,.vlang::-webkit-scrollbar{display:none}
+.vcats button{border:0;background:#f0eee9;border-radius:999px;padding:7px 14px;font-size:14px;white-space:nowrap;min-height:40px;cursor:pointer;font-weight:600;color:#444}
+.vcats button.on{background:var(--c);color:#fff}
+.vmain{max-width:1200px;margin:0 auto;padding:4px 12px 110px}
+.vnote{background:#fff;border-left:4px solid var(--c);border-radius:8px;padding:10px 14px;margin:12px 0 0;font-size:14px;white-space:pre-wrap}
+.vsec h2{font-size:19px;margin:22px 4px 10px;border-left:5px solid var(--c);padding-left:10px;line-height:1.3}
+.vsec h2 small{font-size:12px;color:#888;font-weight:400;margin-left:6px}
+.vgrid{display:grid;gap:10px;grid-template-columns:1fr}
+@media (min-width:700px){ .vgrid{grid-template-columns:1fr 1fr} }
+@media (min-width:1300px){ .vw.kiosk .vgrid{grid-template-columns:1fr 1fr 1fr} }
+.vcard{display:flex;gap:12px;background:#fff;border:0;border-radius:14px;padding:10px;text-align:left;box-shadow:0 1px 3px rgba(0,0,0,.08);cursor:pointer;width:100%;color:inherit;font:inherit;align-items:stretch}
+.vimg{width:110px;height:110px;border-radius:10px;overflow:hidden;flex-shrink:0;background:#eee;position:relative}
+.vw.kiosk .vimg{width:150px;height:130px}
+.vimg img{width:100%;height:100%;object-fit:cover;display:block}
+.vimg .ph{font-size:34px}
+.vtx{flex:1;min-width:0;display:flex;flex-direction:column}
+.vname{font-weight:700;font-size:17px;line-height:1.3}
+.vja{font-size:13px;color:#777;line-height:1.3;margin-top:1px}
+.vdesc{font-size:13px;color:#555;margin-top:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.45}
+.vbot{margin-top:auto;display:flex;align-items:flex-end;justify-content:space-between;gap:8px;padding-top:6px}
+.vprice{font-weight:700;font-size:18px;color:var(--c);white-space:nowrap;font-family:system-ui,sans-serif}
+.vtags{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:3px}
+.tg{font-size:11px;font-weight:700;color:#fff;padding:1px 7px;border-radius:4px;line-height:18px;font-family:system-ui,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.valg{font-size:11px;color:#9a3b30;text-align:right;line-height:1.3}
+.vcard.sold{opacity:.6}
+.soldlab{position:absolute;inset:auto 0 0 0;background:rgba(150,20,20,.88);color:#fff;font-size:12px;font-weight:700;text-align:center;padding:3px 0;font-family:system-ui,sans-serif}
+.vfoot{max-width:1200px;margin:24px auto 0;padding:16px;text-align:center;font-size:12px;color:#777;border-top:1px solid #ddd}
+.vfoot p{margin:3px 0}
+.vfab{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom));z-index:25;border:0;background:#fff;color:#9a3b30;border-radius:999px;padding:10px 18px;min-height:50px;font-weight:700;box-shadow:0 3px 12px rgba(0,0,0,.2);display:flex;align-items:center;gap:6px;cursor:pointer;font-family:system-ui,sans-serif;font-size:15px}
+.vfab.on{background:#9a3b30;color:#fff}
+.vempty{text-align:center;color:#888;padding:40px 10px}
+.kx{position:fixed;left:0;bottom:0;width:70px;height:70px;z-index:30;border:0;background:none;color:rgba(0,0,0,.18);font-size:10px;display:flex;align-items:flex-end;justify-content:flex-start;padding:0 0 calc(6px + env(safe-area-inset-bottom)) 6px;cursor:pointer;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.kx.hold{color:#c00}
+/* 詳しく見る（下から出る） */
+#modal.sheet{align-items:flex-end;padding:0}
+#modal.sheet .box{border-radius:18px 18px 0 0;width:min(640px,100%);padding:0 0 calc(16px + env(safe-area-inset-bottom));max-height:94vh}
+@media (min-width:700px){ #modal.sheet{align-items:center;padding:16px} #modal.sheet .box{border-radius:18px} }
+.vwd{--c:#1f3a6e;color:#222}
+.vwd.serif{font-family:"Noto Serif CJK JP","Noto Serif JP","Hiragino Mincho ProN","Yu Mincho",serif}
+.vd-img{width:100%;aspect-ratio:4/3;max-height:45vh;object-fit:cover;display:block;background:#eee}
+.vd{padding:16px 18px 0}
+.vd h3{font-size:22px;margin:4px 0 2px;line-height:1.3}
+.vd .vprice{font-size:22px}
+.vd p{margin:10px 0;white-space:pre-wrap;color:#444;line-height:1.6}
+.vd-sec{margin-top:12px;font-size:14px}
+.vd-sec b{display:block;font-size:13px;color:#777;margin-bottom:4px}
+.vd-sec ul{margin:0;padding:0;list-style:none}
+.vd-sec li{display:flex;justify-content:space-between;border-bottom:1px dotted #ccc;padding:5px 0}
+.algc{display:inline-block;background:#fbe9e7;color:#9a3b30;border-radius:6px;padding:3px 9px;margin:0 4px 4px 0;font-weight:700;font-size:14px}
+.vd-staff{margin-top:14px;background:#fff8e6;border:1px solid #f0d58a;border-radius:12px;padding:12px;text-align:center}
+.vd-staff small{display:block;color:#8a6d1a;font-size:13px}
+.vd-staff div{font-size:24px;font-weight:700;color:#222;margin-top:2px;font-family:"Noto Sans JP","Noto Sans CJK JP",sans-serif}
+.vd-close{display:block;width:calc(100% - 36px);margin:16px 18px 0;min-height:50px;border-radius:12px;border:1px solid #ccc;background:#fff;font-weight:700;cursor:pointer;font-size:16px}
+.vf-note{font-size:13px;color:#777;margin:10px 0}
+.vload{display:flex;align-items:center;justify-content:center;min-height:100vh;color:#888;font-size:15px;text-align:center;padding:20px;width:100%}
+
+/* =========================================================
+   印刷用（プレビューと共通）
+   ========================================================= */
+.pp{--c:#1f3a6e;color:#222;font-size:10pt;line-height:1.45;font-family:"Noto Sans JP","Noto Sans CJK JP",sans-serif}
+.pp.serif{font-family:"Noto Serif CJK JP","Noto Serif JP","Hiragino Mincho ProN","Yu Mincho",serif}
+.pp.big{font-size:11.5pt}
+.pp-h{text-align:center;border-bottom:1.2mm solid var(--c);padding-bottom:4mm;margin-bottom:6mm;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.pp-h h1{font-size:24pt;margin:0;letter-spacing:.1em;line-height:1.25}
+.pp-h .s2{font-size:11pt;color:#666;letter-spacing:.05em}
+.pp-h .cc{font-size:10pt;color:#555;margin-top:1.5mm}
+.pp-note{font-size:9pt;color:#444;border:.3mm solid #ccc;border-radius:2mm;padding:2mm 3mm;margin-bottom:5mm;white-space:pre-wrap}
+.pp-sec{margin-bottom:6mm}
+.pp-sec h2{font-size:15pt;margin:0 0 3mm;display:flex;align-items:center;gap:2.5mm;break-after:avoid;page-break-after:avoid}
+.pp-sec h2::before{content:"";display:block;width:2mm;height:7mm;background:var(--c);-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.pp-sec h2 small{font-size:9.5pt;color:#777;font-weight:400}
+.pp-list{display:grid;gap:4mm}
+.pp-list.c2{grid-template-columns:1fr 1fr;column-gap:7mm}
+.pp-list.txt{display:block;columns:2;column-gap:9mm}
+.pp-list.txt .pp-it{margin-bottom:2.8mm}
+.pp-it{display:flex;gap:4mm;break-inside:avoid;page-break-inside:avoid}
+.pp-it img{width:42mm;height:30mm;object-fit:cover;border-radius:1.5mm;flex-shrink:0}
+.c2 .pp-it img{width:27mm;height:21mm}
+.pp-tx{flex:1;min-width:0}
+.pp-nm{display:flex;justify-content:space-between;align-items:baseline;gap:3mm;border-bottom:.3mm dotted #999;padding-bottom:.8mm;margin-bottom:.8mm}
+.pp-nm b{font-size:1.2em;line-height:1.25}
+.pp-nm .p{font-weight:700;font-size:1.15em;white-space:nowrap}
+.pp-2{font-size:.88em;color:#666}
+.pp-d{font-size:.88em;color:#555;margin-top:.5mm}
+.pp-op{font-size:.85em;color:#555;margin-top:.5mm}
+.pp-tg{margin-top:1mm;display:flex;gap:1mm;flex-wrap:wrap}
+.pp-tg .tg{font-size:7pt;line-height:1.5;padding:0 1.5mm}
+.pp-alg{font-size:.75em;color:#8a3a30;margin-top:.5mm}
+.pp-f{margin-top:7mm;border-top:.3mm solid #bbb;padding-top:3mm;font-size:8.5pt;color:#666;break-inside:avoid;page-break-inside:avoid;display:flex;align-items:center;gap:5mm;justify-content:center;text-align:center}
+.pp-f p{margin:.5mm 0}
+.pp-f .q{width:24mm;flex-shrink:0}
+.pp-f .q svg{width:100%;height:auto;display:block}
+/* 卓上POP（A4に4枚） */
+.pop-sheet{width:210mm;height:296mm;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;overflow:hidden}
+.pop{border:.2mm dashed #bbb;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:8mm;font-family:"Noto Sans JP","Noto Sans CJK JP",sans-serif;color:#222}
+.pop-n{font-size:15pt;font-weight:700;line-height:1.3}
+.pop-n2{font-size:9.5pt;color:#666}
+.pop-m{font-size:24pt;font-weight:800;letter-spacing:.25em;margin:3mm 0 2mm;padding-left:.25em}
+.pop-q{width:52mm}
+.pop-q svg{width:100%;height:auto;display:block}
+.pop-l{margin-top:3mm;font-size:8.5pt;line-height:1.5;color:#333}
+
+@media print{
+  html,body{background:#fff}
+  body > *:not(#print){display:none!important}
+  #print{display:block}
+  .pp,.pop{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="print"></div>
+<div id="modal"><div class="box"></div></div>
+<div id="toast"><span></span><button hidden>元に戻す</button></div>
+
+<script>
+'use strict';
+/* =========================================================
+   決まりごと（言語・マーク・アレルギー）
+   ========================================================= */
+const LANGS = [
+  {c:'ja',  label:'日本語',   short:'日本語', html:'ja',      gt:'ja',    jp:'日本語'},
+  {c:'en',  label:'English',  short:'EN',     html:'en',      gt:'en',    jp:'英語'},
+  {c:'zh',  label:'繁體中文', short:'繁體',   html:'zh-Hant', gt:'zh-TW', jp:'中国語（繁体字・台湾/香港）'},
+  {c:'zhs', label:'简体中文', short:'简体',   html:'zh-Hans', gt:'zh-CN', jp:'中国語（簡体字・中国本土）'},
+  {c:'ko',  label:'한국어',   short:'한국어', html:'ko',      gt:'ko',    jp:'韓国語'},
+  {c:'th',  label:'ไทย',      short:'ไทย',    html:'th',      gt:'th',    jp:'タイ語'},
+];
+const LS = Object.fromEntries(LANGS.map(l => [l.c, l]));
+
+// お客さま画面の決まった文言
+const T = {
+  all:      {ja:'すべて', en:'All', zh:'全部', zhs:'全部', ko:'전체', th:'ทั้งหมด'},
+  soldout:  {ja:'売り切れ', en:'Sold out', zh:'售完', zhs:'售罄', ko:'품절', th:'หมดแล้ว'},
+  market:   {ja:'時価', en:'Market price', zh:'時價', zhs:'时价', ko:'시가', th:'ราคาตามตลาด'},
+  taxIn:    {ja:'表示価格は税込です', en:'All prices include tax.', zh:'價格皆已含稅', zhs:'价格均已含税', ko:'표시 가격은 세금 포함입니다', th:'ราคาทั้งหมดรวมภาษีแล้ว'},
+  taxOut:   {ja:'表示価格は税抜です（別途消費税）', en:'Prices do not include tax.', zh:'價格未含稅（另加消費稅）', zhs:'价格不含税（另加消费税）', ko:'표시 가격은 세금 별도입니다', th:'ราคายังไม่รวมภาษี'},
+  photo:    {ja:'写真はイメージです', en:'Photos are for illustration only.', zh:'圖片僅供參考', zhs:'图片仅供参考', ko:'사진은 이미지입니다', th:'รูปภาพใช้เพื่อประกอบเท่านั้น'},
+  allergens:{ja:'アレルギー物質', en:'Allergens', zh:'過敏原', zhs:'过敏原', ko:'알레르기 유발 물질', th:'สารก่อภูมิแพ้'},
+  contains: {ja:'含む', en:'Contains', zh:'含有', zhs:'含有', ko:'포함', th:'มีส่วนผสม'},
+  algNote:  {ja:'アレルギー情報は目安です。ご心配な方はスタッフにお尋ねください。', en:'Allergen information is a guide only. Please ask our staff if you have any concerns.', zh:'過敏原資訊僅供參考，如有疑慮請洽詢店員。', zhs:'过敏原信息仅供参考，如有疑虑请咨询店员。', ko:'알레르기 정보는 참고용입니다. 궁금한 점은 직원에게 문의해 주세요.', th:'ข้อมูลสารก่อภูมิแพ้เป็นเพียงข้อมูลเบื้องต้น หากมีข้อสงสัยกรุณาสอบถามพนักงาน'},
+  avoid:    {ja:'入っていないものだけ表示', en:'Hide dishes containing', zh:'隱藏含有以下食材的菜色', zhs:'隐藏含有以下食材的菜品', ko:'다음 재료가 들어간 메뉴 숨기기', th:'ซ่อนเมนูที่มีส่วนผสมต่อไปนี้'},
+  hiding:   {ja:'品を非表示中', en:' dishes hidden', zh:' 道菜已隱藏', zhs:' 道菜已隐藏', ko:'개 메뉴 숨김', th:' เมนูถูกซ่อน'},
+  clear:    {ja:'解除', en:'Clear', zh:'清除', zhs:'清除', ko:'해제', th:'ล้าง'},
+  staff:    {ja:'この画面をスタッフに見せてください', en:'Please show this screen to our staff', zh:'請將此畫面出示給店員', zhs:'请将此画面出示给店员', ko:'이 화면을 직원에게 보여 주세요', th:'กรุณาแสดงหน้าจอนี้ให้พนักงาน'},
+  options:  {ja:'追加・オプション', en:'Options', zh:'加點選項', zhs:'加点选项', ko:'추가 옵션', th:'ตัวเลือกเพิ่มเติม'},
+  close:    {ja:'閉じる', en:'Close', zh:'關閉', zhs:'关闭', ko:'닫기', th:'ปิด'},
+  updated:  {ja:'更新', en:'Updated', zh:'更新', zhs:'更新', ko:'업데이트', th:'อัปเดต'},
+  none:     {ja:'該当するメニューはありません', en:'No dishes to show.', zh:'沒有符合的菜色', zhs:'没有符合的菜品', ko:'해당 메뉴가 없습니다', th:'ไม่มีเมนูที่ตรงกัน'},
+  scan:     {ja:'スマホでメニューを見る', en:'Scan to see the menu', zh:'掃描查看菜單', zhs:'扫码查看菜单', ko:'스캔하여 메뉴 보기', th:'สแกนเพื่อดูเมนู'},
+  loadErr:  {ja:'メニューを読み込めませんでした。電波のよい場所でもう一度お試しください。', en:'Could not load the menu. Please try again.', zh:'無法載入菜單，請稍後再試。', zhs:'无法加载菜单，请稍后再试。', ko:'메뉴를 불러올 수 없습니다. 다시 시도해 주세요.', th:'ไม่สามารถโหลดเมนูได้ กรุณาลองอีกครั้ง'},
+};
+const t = (k, l) => (T[k] && (T[k][l] || T[k].en)) || k;
+
+const TAGS = [
+  {k:'rec',   col:'#c62828', n:{ja:'おすすめ', en:'Recommended', zh:'推薦', zhs:'推荐', ko:'추천', th:'แนะนำ'}},
+  {k:'pop',   col:'#e65100', n:{ja:'人気', en:'Popular', zh:'人氣', zhs:'人气', ko:'인기', th:'ยอดนิยม'}},
+  {k:'new',   col:'#1565c0', n:{ja:'新メニュー', en:'New', zh:'新品', zhs:'新品', ko:'신메뉴', th:'เมนูใหม่'}},
+  {k:'ltd',   col:'#6a1b9a', n:{ja:'期間限定', en:'Limited time', zh:'期間限定', zhs:'限时供应', ko:'기간 한정', th:'เฉพาะช่วงเวลา'}},
+  {k:'spicy', col:'#d84315', n:{ja:'辛口', en:'Spicy', zh:'辣', zhs:'辣', ko:'매운맛', th:'เผ็ด'}},
+  {k:'veg',   col:'#2e7d32', n:{ja:'野菜たっぷり', en:'Vegetable-rich', zh:'豐富蔬菜', zhs:'丰富蔬菜', ko:'채소 듬뿍', th:'ผักเยอะ'}},
+  {k:'vgt',   col:'#00796b', n:{ja:'ベジタリアン', en:'Vegetarian', zh:'素食', zhs:'素食', ko:'채식', th:'มังสวิรัติ'}},
+];
+const TG = Object.fromEntries(TAGS.map(x => [x.k, x]));
+
+const ALG = [
+  {k:'shrimp', req:1, n:{ja:'えび', en:'Shrimp', zh:'蝦', zhs:'虾', ko:'새우', th:'กุ้ง'}},
+  {k:'crab',   req:1, n:{ja:'かに', en:'Crab', zh:'蟹', zhs:'蟹', ko:'게', th:'ปู'}},
+  {k:'walnut', req:1, n:{ja:'くるみ', en:'Walnut', zh:'核桃', zhs:'核桃', ko:'호두', th:'วอลนัท'}},
+  {k:'wheat',  req:1, n:{ja:'小麦', en:'Wheat', zh:'小麥', zhs:'小麦', ko:'밀', th:'ข้าวสาลี'}},
+  {k:'soba',   req:1, n:{ja:'そば', en:'Buckwheat', zh:'蕎麥', zhs:'荞麦', ko:'메밀', th:'บักวีต'}},
+  {k:'egg',    req:1, n:{ja:'卵', en:'Egg', zh:'蛋', zhs:'蛋', ko:'달걀', th:'ไข่'}},
+  {k:'milk',   req:1, n:{ja:'乳', en:'Milk', zh:'乳製品', zhs:'乳制品', ko:'우유', th:'นม'}},
+  {k:'peanut', req:1, n:{ja:'落花生', en:'Peanut', zh:'花生', zhs:'花生', ko:'땅콩', th:'ถั่วลิสง'}},
+  {k:'sesame', n:{ja:'ごま', en:'Sesame', zh:'芝麻', zhs:'芝麻', ko:'참깨', th:'งา'}},
+  {k:'soy',    n:{ja:'大豆', en:'Soy', zh:'大豆', zhs:'大豆', ko:'대두', th:'ถั่วเหลือง'}},
+  {k:'pork',   n:{ja:'豚肉', en:'Pork', zh:'豬肉', zhs:'猪肉', ko:'돼지고기', th:'เนื้อหมู'}},
+  {k:'beef',   n:{ja:'牛肉', en:'Beef', zh:'牛肉', zhs:'牛肉', ko:'소고기', th:'เนื้อวัว'}},
+  {k:'alcohol',n:{ja:'アルコール', en:'Alcohol', zh:'酒精', zhs:'酒精', ko:'알코올', th:'แอลกอฮอล์'}},
+];
+const AG = Object.fromEntries(ALG.map(x => [x.k, x]));
+
+const COLORS = [['#1f3a6e','紺'],['#b3261e','朱'],['#1f6b45','緑'],['#222222','墨'],['#7a4a21','茶'],['#9a7412','金'],['#b8406f','桜'],['#0f6e6a','青緑']];
+const OLD_COLORS = {'bg-blue-800':'#1f3a6e','bg-red-800':'#b3261e','bg-green-800':'#1f6b45','bg-gray-900':'#222222','bg-yellow-700':'#9a7412'};
+
+/* =========================================================
+   小さな道具
+   ========================================================= */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid = p => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const clone = o => JSON.parse(JSON.stringify(o));
+const yen = n => '¥' + (Number(n) || 0).toLocaleString('ja-JP');
+const optYen = n => { n = Number(n) || 0; return n ? (n < 0 ? '−' : '+') + '¥' + Math.abs(n).toLocaleString('ja-JP') : ''; };
+const fmt = ts => { if (!ts) return '—'; const d = new Date(ts); return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`; };
+const SIB = {zh:'zhs', zhs:'zh'};
+// その言語がなければ：簡体⇔繁体 → 英語 → 日本語 の順で代わりを出す
+function tr(o, l) { if (!o) return ''; if (typeof o === 'string') return o; return o[l] || (SIB[l] && o[SIB[l]]) || (l !== 'ja' && o.en) || o.ja || ''; }
+function setPath(o, p, v) { const k = p.split('.'); let x = o; for (let i = 0; i < k.length - 1; i++) { if (x[k[i]] == null) x[k[i]] = {}; x = x[k[i]]; } x[k[k.length - 1]] = v; }
+function getPath(o, p) { return p.split('.').reduce((x, k) => x == null ? x : x[k], o); }
+const SVG = {
+  list:'<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
+  folder:'<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  globe:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
+  store:'<path d="M3 9l1.5-5h15L21 9M3 9v11h18V9M3 9h18M9 20v-6h6v6"/>',
+  printer:'<path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>',
+  qr:'<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3"/>',
+  eye:'<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>',
+  edit:'<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4z"/>',
+  trash:'<path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
+  up:'<path d="M18 15l-6-6-6 6"/>', down:'<path d="M6 9l6 6 6-6"/>',
+  x:'<path d="M18 6L6 18M6 6l12 12"/>',
+  camera:'<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>',
+  copy:'<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+  back:'<path d="M15 18l-6-6 6-6"/>',
+  download:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>',
+  upload:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>',
+  share:'<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/>',
+  ext:'<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/>',
+  check:'<path d="M20 6L9 17l-5-5"/>',
+  filter:'<path d="M22 3H2l8 9.46V19l4 2v-8.54z"/>',
+  search:'<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
+  cloud:'<path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/><path d="M12 13v6M9 16l3-3 3 3"/>',
+};
+const I = n => `<svg class="i" viewBox="0 0 24 24">${SVG[n] || ''}</svg>`;
+
+let toastTimer = null, undoFn = null;
+function toast(msg, undo) {
+  const el = $('#toast'); el.querySelector('span').textContent = msg;
+  const b = el.querySelector('button'); undoFn = undo || null; b.hidden = !undo;
+  el.classList.add('show'); clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.classList.remove('show'); undoFn = null; }, undo ? 6000 : 2600);
+}
+$('#toast button').onclick = () => { if (undoFn) undoFn(); undoFn = null; $('#toast').classList.remove('show'); };
+
+function openModal(html, sheet) { const m = $('#modal'); m.className = 'show' + (sheet ? ' sheet' : ''); m.querySelector('.box').innerHTML = html; m.querySelector('.box').scrollTop = 0; }
+function closeModal() { $('#modal').className = ''; $('#modal .box').innerHTML = ''; }
+$('#modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
+
+function download(name, blob) {
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+function d2b(d) { const [h, b] = d.split(','); const m = (h.match(/:(.*?);/) || [])[1] || 'image/jpeg'; const s = atob(b); const a = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) a[i] = s.charCodeAt(i); return new Blob([a], {type: m}); }
+// 写真を縮める（大きいまま保存すると端末がいっぱいになるため）
+function shrink(src, max, q) {
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload = () => {
+      let w = img.naturalWidth, h = img.naturalHeight; const r = Math.min(1, max / Math.max(w, h)); w = Math.round(w * r); h = Math.round(h * r);
+      const c = document.createElement('canvas'); c.width = w; c.height = h; const x = c.getContext('2d');
+      x.fillStyle = '#fff'; x.fillRect(0, 0, w, h); x.drawImage(img, 0, 0, w, h); res(c.toDataURL('image/jpeg', q));
+    };
+    img.onerror = rej; img.src = src;
+  });
+}
+const fileToData = f => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); });
+const fileToText = f => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsText(f); });
+
+/* =========================================================
+   QRコード（ネットがなくても作れるように中で計算）
+   ========================================================= */
+const QR = (() => {
+  const ECC = [-1, 10, 16, 26, 18, 24, 16, 18, 22, 22, 26, 30, 22, 22, 24, 24, 28, 28, 26, 26, 26, 26, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28];
+  const BLK = [-1, 1, 1, 1, 2, 2, 4, 4, 4, 5, 5, 5, 8, 9, 9, 10, 10, 11, 13, 14, 16, 17, 17, 18, 20, 21, 23, 25, 26, 28, 29, 31, 33, 35, 37, 38, 40, 43, 45, 47, 49];
+  const rawMods = v => { let r = (16 * v + 128) * v + 64; if (v >= 2) { const n = Math.floor(v / 7) + 2; r -= (25 * n - 10) * n - 55; if (v >= 7) r -= 36; } return r; };
+  const dataCap = v => Math.floor(rawMods(v) / 8) - ECC[v] * BLK[v];
+  const mul = (x, y) => { let z = 0; for (let i = 7; i >= 0; i--) { z = (z << 1) ^ ((z >>> 7) * 0x11D); z ^= ((y >>> i) & 1) * x; } return z; };
+  function divisor(deg) { const r = new Array(deg).fill(0); r[deg - 1] = 1; let root = 1; for (let i = 0; i < deg; i++) { for (let j = 0; j < deg; j++) { r[j] = mul(r[j], root); if (j + 1 < deg) r[j] ^= r[j + 1]; } root = mul(root, 2); } return r; }
+  function rem(data, div) { const r = new Array(div.length).fill(0); for (const b of data) { const f = b ^ r.shift(); r.push(0); div.forEach((c, i) => { r[i] ^= mul(c, f); }); } return r; }
+  function penalty(M, n) {
+    let p = 0;
+    for (let a = 0; a < n; a++) {
+      let rx = 1, ry = 1;
+      for (let b = 1; b < n; b++) {
+        if (M[a][b] === M[a][b - 1]) { rx++; if (rx === 5) p += 3; else if (rx > 5) p++; } else rx = 1;
+        if (M[b][a] === M[b - 1][a]) { ry++; if (ry === 5) p += 3; else if (ry > 5) p++; } else ry = 1;
+      }
+    }
+    let dark = 0;
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+      if (M[y][x]) dark++;
+      if (x < n - 1 && y < n - 1 && M[y][x] === M[y][x + 1] && M[y][x] === M[y + 1][x] && M[y][x] === M[y + 1][x + 1]) p += 3;
+    }
+    return p + (Math.ceil(Math.abs(dark * 20 - n * n * 10) / (n * n)) - 1) * 10;
+  }
+  function encode(text) {
+    const bytes = [...new TextEncoder().encode(text)];
+    let ver = 0;
+    for (let v = 1; v <= 40; v++) if (4 + (v < 10 ? 8 : 16) + bytes.length * 8 <= dataCap(v) * 8) { ver = v; break; }
+    if (!ver) return null;
+    const bits = [], put = (val, len) => { for (let i = len - 1; i >= 0; i--) bits.push((val >>> i) & 1); };
+    put(4, 4); put(bytes.length, ver < 10 ? 8 : 16); bytes.forEach(b => put(b, 8));
+    const capBits = dataCap(ver) * 8;
+    put(0, Math.min(4, capBits - bits.length)); put(0, (8 - bits.length % 8) % 8);
+    for (let pad = 0xEC; bits.length < capBits; pad ^= 0xEC ^ 0x11) put(pad, 8);
+    const data = []; for (let i = 0; i < bits.length; i += 8) { let b = 0; for (let j = 0; j < 8; j++) b = (b << 1) | bits[i + j]; data.push(b); }
+    const nb = BLK[ver], el = ECC[ver], raw = Math.floor(rawMods(ver) / 8), nShort = nb - raw % nb, shortLen = Math.floor(raw / nb);
+    const div = divisor(el), blocks = [];
+    for (let i = 0, k = 0; i < nb; i++) { const dat = data.slice(k, k + shortLen - el + (i < nShort ? 0 : 1)); k += dat.length; const ecc = rem(dat, div); if (i < nShort) dat.push(0); blocks.push(dat.concat(ecc)); }
+    const all = [];
+    for (let i = 0; i < blocks[0].length; i++) blocks.forEach((b, j) => { if (i !== shortLen - el || j >= nShort) all.push(b[i]); });
+    const size = ver * 4 + 17;
+    const M = [...Array(size)].map(() => Array(size).fill(false)), F = [...Array(size)].map(() => Array(size).fill(false));
+    const set = (x, y, d) => { M[y][x] = d; F[y][x] = true; };
+    for (let i = 0; i < size; i++) { set(6, i, i % 2 === 0); set(i, 6, i % 2 === 0); }
+    const finder = (x, y) => { for (let dy = -4; dy <= 4; dy++) for (let dx = -4; dx <= 4; dx++) { const xx = x + dx, yy = y + dy; if (xx >= 0 && xx < size && yy >= 0 && yy < size) { const d = Math.max(Math.abs(dx), Math.abs(dy)); set(xx, yy, d !== 2 && d !== 4); } } };
+    finder(3, 3); finder(size - 4, 3); finder(3, size - 4);
+    if (ver > 1) {
+      const n = Math.floor(ver / 7) + 2, step = Math.floor((ver * 8 + n * 3 + 5) / (n * 4 - 4)) * 2, pos = [6];
+      for (let p = size - 7; pos.length < n; p -= step) pos.splice(1, 0, p);
+      for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+        if ((i === 0 && j === 0) || (i === 0 && j === n - 1) || (i === n - 1 && j === 0)) continue;
+        for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) set(pos[i] + dx, pos[j] + dy, Math.max(Math.abs(dx), Math.abs(dy)) !== 1);
+      }
+    }
+    const drawFormat = mask => {
+      const d = mask; let r = d; for (let i = 0; i < 10; i++) r = (r << 1) ^ ((r >>> 9) * 0x537);
+      const b = ((d << 10) | r) ^ 0x5412, g = i => ((b >>> i) & 1) === 1;
+      for (let i = 0; i <= 5; i++) set(8, i, g(i));
+      set(8, 7, g(6)); set(8, 8, g(7)); set(7, 8, g(8));
+      for (let i = 9; i < 15; i++) set(14 - i, 8, g(i));
+      for (let i = 0; i < 8; i++) set(size - 1 - i, 8, g(i));
+      for (let i = 8; i < 15; i++) set(8, size - 15 + i, g(i));
+      set(8, size - 8, true);
+    };
+    drawFormat(0);
+    if (ver >= 7) { let r = ver; for (let i = 0; i < 12; i++) r = (r << 1) ^ ((r >>> 11) * 0x1F25); const b = (ver << 12) | r; for (let i = 0; i < 18; i++) { const bit = ((b >>> i) & 1) === 1, a = size - 11 + i % 3, c = Math.floor(i / 3); set(a, c, bit); set(c, a, bit); } }
+    let i = 0;
+    for (let right = size - 1; right >= 1; right -= 2) {
+      if (right === 6) right = 5;
+      for (let vert = 0; vert < size; vert++) for (let j = 0; j < 2; j++) {
+        const x = right - j, up = ((right + 1) & 2) === 0, y = up ? size - 1 - vert : vert;
+        if (!F[y][x] && i < all.length * 8) { M[y][x] = ((all[i >>> 3] >>> (7 - (i & 7))) & 1) === 1; i++; }
+      }
+    }
+    const MASKS = [(x, y) => (x + y) % 2 === 0, (x, y) => y % 2 === 0, x => x % 3 === 0, (x, y) => (x + y) % 3 === 0, (x, y) => (Math.floor(x / 3) + Math.floor(y / 2)) % 2 === 0,
+      (x, y) => x * y % 2 + x * y % 3 === 0, (x, y) => (x * y % 2 + x * y % 3) % 2 === 0, (x, y) => ((x + y) % 2 + x * y % 3) % 2 === 0];
+    const applyMask = m => { for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) if (!F[y][x] && MASKS[m](x, y)) M[y][x] = !M[y][x]; };
+    let best = 0, bestP = Infinity;
+    for (let m = 0; m < 8; m++) { applyMask(m); drawFormat(m); const p = penalty(M, size); if (p < bestP) { bestP = p; best = m; } applyMask(m); }
+    applyMask(best); drawFormat(best);
+    return M;
+  }
+  return {encode};
+})();
+const QR_CACHE = {};
+function qrSvg(text) {
+  text = String(text || '').trim(); if (!text) return '';
+  if (QR_CACHE[text] != null) return QR_CACHE[text];
+  const M = QR.encode(text); if (!M) return (QR_CACHE[text] = '');
+  const n = M.length, q = 4; let d = '';
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) if (M[y][x]) d += `M${x + q},${y + q}h1v1h-1z`;
+  return (QR_CACHE[text] = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${n + q * 2} ${n + q * 2}" shape-rendering="crispEdges"><rect width="100%" height="100%" fill="#fff"/><path d="${d}" fill="#000"/></svg>`);
+}
+
+/* =========================================================
+   写真の保存（IndexedDB）
+   ========================================================= */
+const IDB = {
+  db: null,
+  open() { return new Promise((res, rej) => { const r = indexedDB.open('menu_pwa_img', 1); r.onupgradeneeded = () => r.result.createObjectStore('img'); r.onsuccess = () => { this.db = r.result; res(); }; r.onerror = () => rej(r.error); }); },
+  req(mode, fn) { return new Promise((res, rej) => { if (!this.db) return rej(new Error('no db')); const r = fn(this.db.transaction('img', mode).objectStore('img')); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },
+  put(id, v) { return this.req('readwrite', s => s.put(v, id)); },
+  del(id) { return this.req('readwrite', s => s.delete(id)); },
+  clear() { return this.req('readwrite', s => s.clear()); },
+  all() { return new Promise((res, rej) => { if (!this.db) return res({}); const out = {}; const r = this.db.transaction('img').objectStore('img').openCursor(); r.onsuccess = () => { const c = r.result; if (c) { out[c.key] = c.value; c.continue(); } else res(out); }; r.onerror = () => rej(r.error); }); }
+};
+let IMG = {};          // 写真ID → 写真データ
+const URLS = {};       // 写真ID → 表示用アドレス
+function imgUrl(id) { if (!id || !IMG[id]) return ''; return URLS[id] || (URLS[id] = URL.createObjectURL(d2b(IMG[id]))); }
+
+/* =========================================================
+   データ
+   ========================================================= */
+const KEY = 'menu_pwa_v1', TOK_KEY = 'menu_pwa_gh';
+function defShop() { return {name:{ja:''}, catch:{}, note:{}, contact:'', color:'#1f3a6e', font:'sans', langs:['ja','en','zh','zhs','ko'], tax:'in', pubUrl:''}; }
+function defState() { return {v:1, shop:defShop(), cats:[], items:[], updated:0, pubBuilt:0, bkAt:0}; }
+function fixItem(it) {
+  return {id: String(it.id || uid('i')), cat: it.cat || '', price: Number(it.price) || 0, market: !!it.market,
+    name: it.name || {}, desc: it.desc || {}, tags: (it.tags || []).filter(k => TG[k]), alg: (it.alg || []).filter(k => AG[k]),
+    options: (it.options || []).map(o => ({name: o.name || {}, price: Number(o.price) || 0})),
+    img: it.img || '', soldout: !!it.soldout, hidden: !!it.hidden};
+}
+function fixState(d) {
+  const b = defState(); d = Object.assign(b, d); d.shop = Object.assign(defShop(), d.shop);
+  ['name','catch','note'].forEach(k => { if (!d.shop[k] || typeof d.shop[k] !== 'object') d.shop[k] = {}; });
+  if (!d.shop.langs.includes('ja')) d.shop.langs.unshift('ja');
+  d.shop.langs = LANGS.map(l => l.c).filter(c => d.shop.langs.includes(c));
+  d.cats = (d.cats || []).map(c => ({id: c.id || uid('c'), name: c.name || {}}));
+  d.items = (d.items || []).map(fixItem);
+  return d;
+}
+function load() { try { const d = JSON.parse(localStorage.getItem(KEY)); if (d && d.shop) return fixState(d); } catch (e) {} return defState(); }
+let S = load();
+function save(content = true) {
+  if (content) S.updated = Date.now();
+  try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { toast('保存できませんでした（端末の空きが足りません）'); }
+}
+let saveTimer = null;
+function saveSoon() { clearTimeout(saveTimer); saveTimer = setTimeout(() => save(), 400); }
+const getTok = () => { try { return localStorage.getItem(TOK_KEY) || ''; } catch (e) { return ''; } };
+const shopName = l => tr(S.shop.name, l || 'ja') || 'メニュー';
+
+// 見本（海鮮食堂 湊）
+function sampleData() {
+  const c = (id, ja, en, zh, zhs, ko, th) => ({id, name:{ja, en, zh, zhs, ko, th}});
+  const L = (ja, en, zh, zhs, ko, th) => ({ja, en, zh, zhs, ko, th});
+  const it = (cat, price, tags, alg, name, desc, options = [], extra = {}) => fixItem(Object.assign({id: uid('i'), cat, price, tags, alg, name, desc, options}, extra));
+  return {
+    shop: {name: L('海鮮食堂 湊', 'Seafood Diner MINATO', '海鮮食堂 湊', '海鲜食堂 湊', '해산물 식당 미나토', 'ร้านอาหารทะเล มินาโตะ'),
+      catch: L('港町の朝獲れ魚', 'Fresh catch from the harbor every morning', '港口每天早晨的新鮮漁獲', '港口每天早晨的新鲜渔获', '항구에서 매일 아침 잡은 생선', 'ปลาสดจากท่าเรือทุกเช้า'),
+      note: {}, contact: 'Tel: 03-XXXX-XXXX / Instagram: @minato_sample'},
+    cats: [
+      c('c_main', 'おすすめメニュー', 'Recommended', '推薦菜單', '推荐菜单', '추천 메뉴', 'เมนูแนะนำ'),
+      c('c_side', '一品料理', 'Side Dishes', '單品料理', '单品料理', '일품 요리', 'เมนูทานเล่น'),
+      c('c_drink', 'お飲み物', 'Drinks', '飲品', '饮品', '음료', 'เครื่องดื่ม'),
+    ],
+    items: [
+      it('c_main', 1800, ['rec','pop'], ['shrimp','crab','wheat','soy'],
+        L('特選海鮮丼', 'Special Seafood Bowl', '特選海鮮蓋飯', '特选海鲜盖饭', '특선 해산물 덮밥', 'ข้าวหน้าซีฟู้ดพิเศษ'),
+        L('朝獲れの魚介を10種類以上のせた、当店いちばん人気の丼です。', 'Our most popular bowl, topped with over 10 kinds of seafood caught this morning.', '鋪滿十種以上當天早上捕獲的海鮮，本店最受歡迎的蓋飯。', '铺满十种以上当天早上捕获的海鲜，本店最受欢迎的盖饭。', '아침에 잡은 해산물을 10종류 이상 올린 가게 최고 인기 덮밥입니다.', 'ข้าวหน้าซีฟู้ดยอดนิยมของร้าน ท็อปปิ้งด้วยอาหารทะเลกว่า 10 ชนิดที่จับได้เมื่อเช้านี้'),
+        [{name: L('ご飯大盛り', 'Large rice', '白飯加量', '米饭加量', '밥 곱빼기', 'เพิ่มข้าว'), price: 100},
+         {name: L('味噌汁', 'Miso soup', '味噌湯', '味噌汤', '된장국', 'ซุปมิโซะ'), price: 150}]),
+      it('c_main', 1500, ['rec'], ['wheat','soy'],
+        L('金目鯛の煮付け', 'Simmered Alfonsino', '燉煮金目鯛', '炖煮金目鲷', '금눈돔 조림', 'ปลาคินเมะไดต้มซีอิ๊ว'),
+        L('甘辛いタレでふっくら煮付けました。', 'Simmered until tender in a sweet soy-based sauce.', '用甜鹹醬汁燉煮得鬆軟入味。', '用甜咸酱汁炖煮得松软入味。', '달콤 짭짤한 양념으로 부드럽게 조렸습니다.', 'ต้มในซอสซีอิ๊วหวานจนเนื้อนุ่ม')),
+      it('c_main', 0, [], [],
+        L('本日の刺身盛り合わせ', "Today's Sashimi Platter", '本日生魚片拼盤', '本日刺身拼盘', '오늘의 모둠회', 'ซาชิมิรวมประจำวัน'),
+        L('その日いちばんの魚を5種盛り合わせ。', "Five kinds of the day's best fish.", '當日精選五種鮮魚。', '当日精选五种鲜鱼。', '그날 가장 좋은 생선 5종 모둠.', 'ปลาที่ดีที่สุดของวัน 5 ชนิด'), [], {market: true}),
+      it('c_side', 900, [], ['shrimp','wheat','egg'],
+        L('えびの天ぷら', 'Shrimp Tempura', '炸蝦天婦羅', '炸虾天妇罗', '새우튀김', 'เทมปุระกุ้ง'),
+        L('大きな海老を3本、サクッと揚げました。', 'Three large shrimp, fried light and crispy.', '三尾大蝦，炸得酥脆。', '三只大虾，炸得酥脆。', '큰 새우 3마리를 바삭하게 튀겼습니다.', 'กุ้งตัวใหญ่ 3 ตัว ทอดกรอบ')),
+      it('c_side', 400, ['veg','vgt'], ['soy'],
+        L('枝豆', 'Edamame', '毛豆', '毛豆', '풋콩', 'ถั่วแระญี่ปุ่น'),
+        L('塩ゆでの枝豆です。', 'Boiled and salted green soybeans.', '鹽水煮毛豆。', '盐水煮毛豆。', '소금물에 삶은 풋콩입니다.', 'ถั่วแระต้มเกลือ')),
+      it('c_drink', 600, ['pop'], ['wheat','alcohol'],
+        L('生ビール', 'Draft Beer', '生啤酒', '生啤酒', '생맥주', 'เบียร์สด'),
+        L('中ジョッキ', 'Medium mug', '中杯', '中杯', '중간 잔', 'แก้วขนาดกลาง')),
+      it('c_drink', 700, ['ltd'], ['alcohol'],
+        L('地酒（一合）', 'Local Sake (180ml)', '在地清酒（一合）', '当地清酒（一合）', '지역 사케 (1홉)', 'สาเกท้องถิ่น (180 มล.)'),
+        L('季節ごとに選んだ地元の酒蔵の日本酒です。', 'Seasonal sake from local breweries.', '依季節挑選的在地酒藏清酒。', '按季节挑选的当地酒厂清酒。', '계절마다 고른 지역 양조장의 사케입니다.', 'สาเกจากโรงกลั่นท้องถิ่นที่คัดสรรตามฤดูกาล')),
+      it('c_drink', 300, [], [],
+        L('ウーロン茶', 'Oolong Tea', '烏龍茶', '乌龙茶', '우롱차', 'ชาอูหลง'), {}),
+    ],
+  };
+}
+
+/* =========================================================
+   前のツール（V3.2 など）のデータを読み込む
+   ========================================================= */
+async function convertOld(d) {
+  const shop = defShop();
+  const nm = d.config.name; if (typeof nm === 'string') shop.name = {ja: nm}; else Object.assign(shop.name, nm || {});
+  shop.contact = d.config.contact || '';
+  shop.color = OLD_COLORS[d.config.logoColor] || shop.color;
+  let cats;
+  if (Array.isArray(d.categories)) cats = d.categories.map(c => ({id: String(c.id || uid('c')), name: Object.assign({}, c.name)}));
+  else cats = [
+    {id:'cat_main', name:{ja:'おすすめ・メイン', en:'Recommended / Main', zh:'推薦菜單', zhs:'推荐菜单', ko:'추천 메뉴'}},
+    {id:'cat_side', name:{ja:'サイドメニュー', en:'Side Dishes', zh:'副菜', zhs:'配菜', ko:'사이드 메뉴'}},
+    {id:'cat_drink', name:{ja:'ドリンク', en:'Drinks', zh:'飲料', zhs:'饮料', ko:'음료'}},
+    {id:'cat_other', name:{ja:'その他', en:'Other', zh:'其他', zhs:'其他', ko:'기타'}},
+  ];
+  const catMap = {main:'cat_main', side:'cat_side', drink:'cat_drink'};
+  const images = {}; let skipped = 0;
+  const L = v => typeof v === 'string' ? {ja: v} : Object.assign({}, v || {});
+  const items = [];
+  for (const o of (d.items || [])) {
+    let cat = o.categoryId || catMap[o.category] || (Array.isArray(d.categories) ? '' : 'cat_other');
+    let img = '';
+    if (typeof o.image === 'string' && o.image.startsWith('data:image')) {
+      img = uid('p');
+      try { images[img] = await shrink(o.image, 1000, 0.82); } catch (e) { images[img] = o.image; }
+    } else if (o.image && !/placehold\.co/.test(o.image)) skipped++;
+    items.push(fixItem({id: String(o.id || uid('i')), cat, price: o.price, name: L(o.name), desc: L(o.desc), tags: o.tags || [],
+      options: (o.options || []).map(x => ({name: L(x.name), price: x.price})), img}));
+  }
+  const used = new Set(items.map(i => i.cat));
+  cats = cats.filter(c => c.id !== 'cat_other' || used.has('cat_other'));
+  // 旧ツールで使われていた言語を有効にする
+  const langs = new Set(['ja']);
+  const seeLang = o => Object.keys(o || {}).forEach(k => { if (LS[k] && o[k]) langs.add(k); });
+  seeLang(shop.name); cats.forEach(c => seeLang(c.name)); items.forEach(i => seeLang(i.name));
+  shop.langs = LANGS.map(l => l.c).filter(c => langs.has(c) || defShop().langs.includes(c));
+  return {state: fixState({shop, cats, items}), images, skipped};
+}
+
+async function restoreFile(file) {
+  let d;
+  try { d = JSON.parse(await fileToText(file)); } catch (e) { alert('ファイルを読み込めませんでした。'); return; }
+  let next, images, msg;
+  if (d && d.app === 'menu-pwa' && d.data) {
+    if (!confirm(`バックアップ（${fmt(d.saved)}）から戻します。\n今のデータはすべて置きかわります。よろしいですか？`)) return;
+    next = fixState(d.data); images = d.images || {}; msg = 'バックアップから戻しました';
+  } else if (d && d.config && Array.isArray(d.items)) {
+    if (!confirm(`前のメニュー作成ツールのデータ（${d.items.length}品）を読み込みます。\n今のデータはすべて置きかわります。よろしいですか？`)) return;
+    const r = await convertOld(d); next = r.state; images = r.images;
+    msg = `前のツールのデータを読み込みました（${next.items.length}品）` + (r.skipped ? `／ネット上の写真${r.skipped}枚は読み込めないので外しました` : '');
+  } else { alert('このアプリのバックアップでも、前のメニュー作成ツールのデータでもないようです。'); return; }
+  try {
+    await IDB.clear();
+    for (const [k, v] of Object.entries(images)) await IDB.put(k, v);
+  } catch (e) { alert('写真を保存できませんでした。'); }
+  Object.values(URLS).forEach(u => URL.revokeObjectURL(u)); Object.keys(URLS).forEach(k => delete URLS[k]);
+  IMG = Object.assign({}, images);
+  const pubUrl = S.shop.pubUrl;
+  S = next; if (!S.shop.pubUrl) S.shop.pubUrl = pubUrl;
+  save(); UI.page = 'menu'; render(); toast(msg);
+}
+
+async function backupData() {
+  const all = await IDB.all().catch(() => IMG);
+  const used = {}; S.items.forEach(i => { if (i.img && all[i.img]) used[i.img] = all[i.img]; });
+  return {app: 'menu-pwa', v: 1, saved: Date.now(), data: clone(S), images: used};
+}
+function backupName() { const d = new Date(); return `メニュー_バックアップ_${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}.json`; }
+
+/* =========================================================
+   公開用ファイル（menu.json）
+   ========================================================= */
+async function buildPublic(withImg) {
+  const known = new Set(S.cats.map(c => c.id));
+  const items = clone(S.items.filter(i => !i.hidden && known.has(i.cat)));
+  const images = {};
+  for (const it of items) {
+    if (withImg && it.img && IMG[it.img]) { try { images[it.img] = await shrink(IMG[it.img], 480, 0.72); } catch (e) {} }
+    if (!images[it.img]) it.img = '';
+    delete it.hidden;
+  }
+  const shop = clone(S.shop); delete shop.pubUrl;
+  return {app: 'menu-pwa-public', v: 1, updated: S.updated || Date.now(), shop, cats: clone(S.cats.filter(c => items.some(i => i.cat === c.id))), items, images};
+}
+function ghFromUrl(u) {
+  const m = /^https:\/\/([a-z0-9-]+)\.github\.io\/([^/?#]*)/i.exec(u || ''); if (!m) return null;
+  return {owner: m[1], repo: m[2] || `${m[1]}.github.io`};
+}
+function normUrl(u) {
+  u = (u || '').trim(); if (!u) return '';
+  if (!/^https?:\/\//i.test(u)) u = 'https://' + u;
+  u = u.replace(/[?#].*$/, '').replace(/index\.html$/i, '');
+  if (!u.endsWith('/')) u += '/';
+  return u;
+}
+function b64utf8(str) {
+  const bytes = new TextEncoder().encode(str); let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+async function ghPublish() {
+  const gh = ghFromUrl(S.shop.pubUrl), tok = getTok();
+  if (!gh) throw new Error('公開アドレスが「https://ユーザー名.github.io/…/」の形ではありません。');
+  if (!tok) throw new Error('GitHubの鍵（トークン）が入っていません。');
+  const data = await buildPublic(UI.pubImg);
+  const json = JSON.stringify(data);
+  const api = `https://api.github.com/repos/${gh.owner}/${gh.repo}/contents/menu.json`;
+  const h = {Authorization: 'Bearer ' + tok, Accept: 'application/vnd.github+json'};
+  const why = s => s === 401 ? '鍵（トークン）が違うか、期限が切れています。' : (s === 403 || s === 404) ? `鍵に「${gh.owner}/${gh.repo}」へ書き込む許可がないか、リポジトリの名前が違います。` : `GitHubでエラーが起きました（${s}）。`;
+  let sha;
+  const r0 = await fetch(api, {headers: h, cache: 'no-store'});
+  if (r0.ok) sha = (await r0.json()).sha; else if (r0.status !== 404) throw new Error(why(r0.status));
+  const r = await fetch(api, {method: 'PUT', headers: Object.assign({'Content-Type': 'application/json'}, h),
+    body: JSON.stringify(Object.assign({message: 'メニューを更新 ' + fmt(Date.now()), content: b64utf8(json)}, sha ? {sha} : {}))});
+  if (!r.ok) throw new Error(why(r.status));
+  S.pubBuilt = data.updated; S.pubAt = Date.now(); save(false);
+  return Math.round(json.length / 1024);
+}
+async function checkPublic() {
+  const r = await fetch(S.shop.pubUrl + 'menu.json?t=' + Date.now(), {cache: 'no-store'});
+  if (!r.ok) throw new Error(r.status);
+  return r.json();
+}
+
+/* =========================================================
+   画面の状態
+   ========================================================= */
+const UI = {
+  page: 'menu', draft: null, draftImg: undefined, dirty: false, mdraft: null,
+  tl: '', tMissing: true, pubImg: true, pub: null,
+  pr: {lang: 'ja', lang2: '', layout: 'photo1', size: 'n', desc: true, alg: true, sold: true, qr: true},
+};
+const NAV = [['menu','list','メニュー','メニュー'], ['cats','folder','カテゴリ','カテゴリ'], ['trans','globe','翻訳','翻訳'], ['shop','store','お店の設定','お店'], ['print','printer','印刷・PDF','印刷'], ['qr','qr','QR・公開','QR']];
+const unpublished = () => !!S.shop.pubUrl && S.items.length > 0 && S.updated > (S.pubBuilt || 0);
+
+function render() {
+  const app = $('#app');
+  if (UI.page === 'kiosk') { app.innerHTML = viewerHTML(); afterViewer(); return; }
+  const pg = {menu: pageMenu, edit: pageEdit, cats: pageCats, trans: pageTrans, shop: pageShop, print: pagePrint, qr: pageQr}[UI.page] || pageMenu;
+  const nk = UI.page === 'edit' ? 'menu' : UI.page, dot = unpublished();
+  app.innerHTML =
+    `<nav class="side"><div class="brand">${esc(shopName())}<small>多言語メニュー</small></div>
+      ${NAV.map(([k, ic, lb]) => `<button class="${nk === k ? 'on' : ''}" data-act="go" data-p="${k}">${I(ic)}${lb}${k === 'qr' && dot ? '<span class="dotw"></span>' : ''}</button>`).join('')}
+      <hr><button data-act="kiosk">${I('eye')}お客さま表示</button></nav>
+     <main>${pg()}</main>
+     <nav class="bottom">${NAV.map(([k, ic, , sh]) => `<button class="${nk === k ? 'on' : ''}" data-act="go" data-p="${k}">${I(ic)}${sh}${k === 'qr' && dot ? '<span class="dotw"></span>' : ''}</button>`).join('')}<button data-act="kiosk">${I('eye')}表示</button></nav>`;
+  if (UI.page === 'print') fitPreview();
+}
+
+/* ---------- メニュー一覧 ---------- */
+const groupKey = it => S.cats.some(c => c.id === it.cat) ? it.cat : '__none';
+function pageMenu() {
+  const groups = S.cats.map(c => ({id: c.id, name: c.name.ja || '(名前なし)', items: S.items.filter(i => i.cat === c.id)}));
+  const none = S.items.filter(i => groupKey(i) === '__none');
+  if (none.length) groups.push({id: '__none', name: '未分類（お客さまには出ません）', items: none});
+  const sold = S.items.filter(i => i.soldout).length;
+  return `<div class="top"><h1>メニュー <span class="badge gray">${S.items.length}品</span>${sold ? `<span class="badge red">売り切れ ${sold}</span>` : ''}</h1>
+      <div class="actbar">${sold ? `<button class="btn sm" data-act="clearSold">売り切れをすべて戻す</button>` : ''}<button class="btn pri" data-act="newItem">${I('plus')}新しいメニュー</button></div></div>
+    ${unpublished() ? `<div class="note warn flex" style="margin:0 0 14px"><span>直した内容が、まだQRコードのメニューに出ていません。</span><button class="btn sm" data-act="go" data-p="qr">${I('cloud')}公開する</button></div>` : ''}
+    ${S.items.length ? `<div class="search">${I('search')}<input class="inp" data-q placeholder="料理名でさがす（どの言語でも）"></div>` : `
+      <div class="card empty"><p style="font-size:18px;font-weight:700;color:var(--ink);margin-top:0">メニューがまだありません</p>
+        <p>「新しいメニュー」から1品ずつ入れられます。<br>まず触ってみたいときは見本を入れてみてください（あとで消せます）。</p>
+        <div class="actbar" style="justify-content:center"><button class="btn pri" data-act="sample">見本のメニューを入れてみる</button>
+        <label class="btn">${I('upload')}前のツールのデータを読み込む<input type="file" accept=".json,application/json" data-file="restore" hidden></label></div>
+        <div class="note">前のパソコン版（メニュー作成ツール V3.2 など）で「保存」したファイル（menu_backup_….json）を読み込めます。</div></div>`}
+    ${groups.map(g => `<section class="card grp" data-grp><h2><span>${esc(g.name)} <span class="badge gray">${g.items.length}</span></span>${g.id !== '__none' ? `<button class="btn sm ghost" data-act="newItem" data-cat="${g.id}">${I('plus')}ここに追加</button>` : ''}</h2>
+      ${g.items.length ? g.items.map((it, i) => rowHTML(it, i, g.items.length)).join('') : '<div class="muted small">まだありません</div>'}</section>`).join('')}`;
+}
+function thumb(it, color) {
+  const u = imgUrl(it.img);
+  return u ? `<img src="${u}" alt="" loading="lazy">` : `<span class="ph" style="background:${color}">${esc((it.name.ja || '?').slice(0, 1))}</span>`;
+}
+function rowHTML(it, i, n) {
+  const lb = S.shop.langs.filter(l => l !== 'ja').map(l => `<span class="lb ${it.name[l] ? 'ok' : 'ng'}" title="${LS[l].jp}">${LS[l].short}</span>`).join('');
+  const key = esc(Object.values(it.name).join(' ').toLowerCase());
+  return `<div class="it ${it.soldout ? 'sold' : ''} ${it.hidden ? 'hid' : ''}" data-k="${key}">
+    <div class="mv"><button data-act="mv" data-id="${it.id}" data-d="-1" ${i === 0 ? 'disabled' : ''} aria-label="上へ">${I('up')}</button><button data-act="mv" data-id="${it.id}" data-d="1" ${i === n - 1 ? 'disabled' : ''} aria-label="下へ">${I('down')}</button></div>
+    <button class="it-main" data-act="edit" data-id="${it.id}"><span class="th">${thumb(it, S.shop.color)}</span>
+      <span class="it-tx"><b>${esc(it.name.ja || '(名前なし)')}</b><span class="lbs">${it.hidden ? '<span class="badge gray">非表示</span>' : ''}${lb}</span></span>
+      <span class="pr">${it.market ? '時価' : yen(it.price)}</span></button>
+    <button class="sw ${it.soldout ? 'on' : ''}" data-act="sold" data-id="${it.id}">${it.soldout ? '売り切れ中' : '売り切れ'}</button></div>`;
+}
+
+/* ---------- メニューを直す ---------- */
+function pageEdit() {
+  const d = UI.draft, langs = S.shop.langs;
+  const src = UI.draftImg !== undefined ? UI.draftImg : imgUrl(d.img);
+  const isNew = !S.items.some(x => x.id === d.id);
+  const chip = (list, sel, act) => list.map(x => `<button class="${sel.includes(x.k) ? 'on' : ''}" data-act="${act}" data-k="${x.k}">${x.n.ja}</button>`).join('');
+  return `<div class="top"><h1><button class="btn ghost" data-act="back">${I('back')}もどる</button>${isNew ? '新しいメニュー' : 'メニューを直す'}</h1>
+      <div class="actbar"><button class="btn pri" data-act="saveItem">${I('check')}保存</button></div></div>
+    <div class="ed-grid"><div>
+      <div class="card"><h2>写真</h2>
+        <label class="photo">${src ? `<img src="${src}" alt="">` : `<span>${I('camera')}<br>タップして写真をえらぶ<br><small>カメラで撮る・ギャラリーから</small></span>`}<input type="file" accept="image/*" data-file="itemImg" hidden></label>
+        ${src ? `<button class="btn sm wide" data-act="rmImg" style="margin-top:8px">${I('x')}写真を外す</button>` : ''}</div>
+      <div class="card"><h2>値段・カテゴリ</h2>
+        <label class="f">カテゴリ</label><select class="inp" data-d="cat">${S.cats.map(c => `<option value="${c.id}" ${c.id === d.cat ? 'selected' : ''}>${esc(c.name.ja)}</option>`).join('')}</select>
+        <label class="f">値段（円）</label><input class="inp num" type="number" inputmode="numeric" data-d="price" data-num value="${d.price}">
+        <label class="check"><input type="checkbox" data-d="market" ${d.market ? 'checked' : ''}>時価（値段のかわりに「時価」と出す）</label>
+        <label class="check"><input type="checkbox" data-d="soldout" ${d.soldout ? 'checked' : ''}>売り切れ</label>
+        <label class="check"><input type="checkbox" data-d="hidden" ${d.hidden ? 'checked' : ''}>お客さまに見せない（季節外・準備中など）</label></div>
+    </div><div>
+      <div class="card"><h2>名前と説明 <small>日本語は必ず。ほかの言語は空でもOK（英語→日本語の順で代わりに出ます）</small></h2>
+        ${langs.map(l => `<div class="lgb"><div class="lgh"><b>${LS[l].label}</b>${l !== 'ja' ? `<span class="muted small">${LS[l].jp}</span><button class="btn sm ghost" data-act="gtd" data-l="${l}">${I('ext')}翻訳サイトで訳す</button>` : ''}</div>
+          <input class="inp" data-d="name.${l}" value="${esc(d.name[l] || '')}" placeholder="${l === 'ja' ? '料理名（必須）' : '料理名'}">
+          <textarea class="inp" data-d="desc.${l}" placeholder="説明（なくてもOK）">${esc(d.desc[l] || '')}</textarea></div>`).join('')}</div>
+      <div class="card"><h2>マーク</h2><div class="chips">${chip(TAGS, d.tags, 'tg')}</div></div>
+      <div class="card"><h2>アレルギー・食材 <small>入っているものをえらぶ。お客さまはこれで絞りこめます</small></h2>
+        <div class="subh">特定原材料（表示義務の8品目）</div><div class="chips alg">${chip(ALG.filter(a => a.req), d.alg, 'ag')}</div>
+        <div class="subh">そのほか（宗教・好みで気にされる方が多いもの）</div><div class="chips alg">${chip(ALG.filter(a => !a.req), d.alg, 'ag')}</div></div>
+      <div class="card"><h2>オプション <small>大盛り・トッピングなど</small><button class="btn sm" data-act="addOpt">${I('plus')}追加</button></h2>
+        ${d.options.length ? d.options.map((o, i) => `<div class="opt"><div class="row">
+            <input class="inp grow" data-d="options.${i}.name.ja" value="${esc(o.name.ja || '')}" placeholder="オプション名（日本語）">
+            <input class="inp num" type="number" inputmode="numeric" data-d="options.${i}.price" data-num value="${o.price}" placeholder="追加料金">
+            <button class="btn sm" data-act="rmOpt" data-i="${i}" aria-label="削除">${I('x')}</button></div>
+            ${langs.length > 1 ? `<div class="opt-tr">${langs.filter(l => l !== 'ja').map(l => `<input class="inp sm" data-d="options.${i}.name.${l}" value="${esc(o.name[l] || '')}" placeholder="${LS[l].label}">`).join('')}</div>` : ''}</div>`).join('')
+          : '<div class="muted small">オプションなし</div>'}</div>
+    </div></div>
+    <div class="actbar end">${!isNew ? `<button class="btn" data-act="delItem" style="color:var(--bad)">${I('trash')}削除</button><button class="btn" data-act="dupItem">${I('copy')}複製</button>` : ''}<span class="sp"></span>
+      <button class="btn" data-act="back">やめる</button><button class="btn pri" data-act="saveItem">${I('check')}保存</button></div>`;
+}
+async function saveEdit() {
+  const d = UI.draft;
+  d.name.ja = (d.name.ja || '').trim();
+  if (!d.name.ja) { toast('日本語の料理名を入れてください'); const el = document.querySelector('[data-d="name.ja"]'); if (el) el.focus(); return; }
+  if (!S.cats.some(c => c.id === d.cat) && S.cats[0]) d.cat = S.cats[0].id;
+  if (UI.draftImg !== undefined) {
+    const old = d.img;
+    if (UI.draftImg) {
+      const id = uid('p');
+      try { await IDB.put(id, UI.draftImg); } catch (e) { toast('写真を保存できませんでした'); return; }
+      IMG[id] = UI.draftImg; d.img = id;
+    } else d.img = '';
+    if (old && !S.items.some(x => x.id !== d.id && x.img === old)) { IDB.del(old).catch(() => {}); delete IMG[old]; }
+  }
+  d.options = d.options.filter(o => (o.name.ja || '').trim() || o.price);
+  const i = S.items.findIndex(x => x.id === d.id);
+  if (i >= 0) S.items[i] = d; else S.items.push(d);
+  save(); UI.draft = null; UI.draftImg = undefined; UI.dirty = false; UI.page = 'menu'; render(); window.scrollTo(0, 0); toast('保存しました');
+}
+
+/* ---------- カテゴリ ---------- */
+function pageCats() {
+  const others = S.shop.langs.filter(l => l !== 'ja');
+  return `<div class="top"><h1>カテゴリ</h1><button class="btn pri" data-act="addCat">${I('plus')}カテゴリを追加</button></div>
+    <div class="card">${S.cats.length ? S.cats.map((c, i) => {
+      const n = S.items.filter(x => x.cat === c.id).length, miss = others.filter(l => !c.name[l]);
+      return `<div class="crow"><div class="mv"><button data-act="mvCat" data-i="${i}" data-d="-1" ${i === 0 ? 'disabled' : ''}>${I('up')}</button><button data-act="mvCat" data-i="${i}" data-d="1" ${i === S.cats.length - 1 ? 'disabled' : ''}>${I('down')}</button></div>
+        <div class="grow"><b>${esc(c.name.ja || '(名前なし)')}</b> <span class="badge gray">${n}品</span>
+          <div class="small muted">${others.map(l => c.name[l] ? esc(c.name[l]) : '').filter(Boolean).join(' / ')}${miss.length ? ` <span class="badge warn">未翻訳 ${miss.map(l => LS[l].short).join('・')}</span>` : ''}</div></div>
+        <button class="btn sm" data-act="editCat" data-id="${c.id}">${I('edit')}直す</button><button class="btn sm" data-act="delCat" data-id="${c.id}" aria-label="削除">${I('trash')}</button></div>`;
+    }).join('') : '<div class="empty">カテゴリがまだありません</div>'}</div>
+    <div class="note">お客さまの画面・印刷では、この順番で並びます。メニューが1つもないカテゴリは表示されません。</div>`;
+}
+function catModal(c) {
+  const isNew = !c; UI.mdraft = c ? clone(c) : {id: uid('c'), name: {}};
+  openModal(`<h2>${isNew ? 'カテゴリを追加' : 'カテゴリの名前'}</h2>
+    ${S.shop.langs.map(l => `<label class="f">${LS[l].label}${l !== 'ja' ? ` <span class="muted small">${LS[l].jp}</span><button class="btn sm ghost" data-act="gtm" data-l="${l}">${I('ext')}訳す</button>` : '（必須）'}</label>
+      <input class="inp" data-m="name.${l}" value="${esc(UI.mdraft.name[l] || '')}" placeholder="${l === 'ja' ? '例：お飲み物' : ''}">`).join('')}
+    <div class="actbar end" style="margin-top:16px"><button class="btn" data-act="closeM">やめる</button><button class="btn pri" data-act="saveCat">${I('check')}保存</button></div>`);
+  setTimeout(() => { const el = document.querySelector('[data-m="name.ja"]'); if (el && isNew) el.focus(); }, 50);
+}
+
+/* ---------- 翻訳 ---------- */
+function transFields() {
+  const f = [];
+  const add = (grp, label, obj, multi) => { if (obj && (obj.ja || '').trim()) f.push({grp, label, obj, multi}); };
+  add('お店', '店名', S.shop.name); add('お店', 'キャッチコピー', S.shop.catch); add('お店', 'お知らせ', S.shop.note, true);
+  S.cats.forEach(c => add('カテゴリ', 'カテゴリ名', c.name));
+  S.cats.forEach(c => S.items.filter(i => i.cat === c.id).forEach(it => {
+    add(c.name.ja, '料理名', it.name);
+    add(c.name.ja, `説明（${it.name.ja}）`, it.desc, true);
+    it.options.forEach(o => add(c.name.ja, `オプション（${it.name.ja}）`, o.name));
+  }));
+  return f;
+}
+function pageTrans() {
+  const others = S.shop.langs.filter(l => l !== 'ja');
+  if (!others.length) return `<div class="top"><h1>翻訳</h1></div><div class="card empty">使う言語が日本語だけになっています。<br><button class="btn pri" data-act="go" data-p="shop" style="margin-top:12px">お店の設定で言語をえらぶ</button></div>`;
+  if (!others.includes(UI.tl)) UI.tl = others[0];
+  const L = UI.tl, f = transFields(), has = x => !!(x.obj[L] || '').trim();
+  const done = f.filter(has).length;
+  return `<div class="top"><h1>翻訳</h1></div>
+    <div class="ttabs">${others.map(l => { const n = f.filter(x => !(x.obj[l] || '').trim()).length; return `<button class="${l === L ? 'on' : ''}" data-act="tl" data-l="${l}">${LS[l].label}${n ? `<span class="cnt">${n}</span>` : ' ✓'}</button>`; }).join('')}</div>
+    <div class="card"><div class="row" style="justify-content:space-between"><b>${LS[L].jp}：${done} / ${f.length} 入力ずみ</b>
+      <label class="check" style="margin:0"><input type="checkbox" data-ch="tMissing" ${UI.tMissing ? 'checked' : ''}>まだのものだけ表示</label></div>
+      <div class="bar"><i style="width:${f.length ? Math.round(done / f.length * 100) : 100}%"></i></div>
+      <div class="small muted">「訳す」で Google 翻訳が開きます（ネットが必要）。訳をコピーして、ここに貼りつけてください。お店の方が読めない言語は、お客さまに見せる前にできれば確認を。</div></div>
+    <div class="card">${f.map((x, i) => (UI.tMissing && has(x)) ? '' : `<div class="tf"><div class="tf-h"><span class="badge gray">${esc(x.grp)}</span>${esc(x.label)}</div>
+        <div class="tf-ja">${esc(x.obj.ja)}</div>
+        <div class="tf-in">${x.multi ? `<textarea class="inp" data-tf="${i}" placeholder="${LS[L].label}">${esc(x.obj[L] || '')}</textarea>` : `<input class="inp" data-tf="${i}" value="${esc(x.obj[L] || '')}" placeholder="${LS[L].label}">`}
+        <button class="btn sm" data-act="gtf" data-i="${i}">${I('ext')}訳す</button></div></div>`).join('') || `<div class="empty">${f.length ? `${LS[L].jp}はすべて入力ずみです 🎉` : 'メニューがまだありません'}</div>`}</div>`;
+}
+function openTranslate(text, l) {
+  if (!text.trim()) { toast('日本語の文がまだありません'); return; }
+  window.open(`https://translate.google.com/?sl=ja&tl=${LS[l].gt}&text=${encodeURIComponent(text)}&op=translate`, '_blank');
+}
+
+/* ---------- お店の設定 ---------- */
+function pageShop() {
+  const sh = S.shop, langs = sh.langs;
+  const ml = (key, label, multi, ph) => `<label class="f">${label}</label>${langs.map(l => `<div class="mlrow"><span class="ml">${LS[l].short}</span>${multi
+      ? `<textarea class="inp" data-s="shop.${key}.${l}" placeholder="${l === 'ja' ? ph : ''}">${esc(sh[key][l] || '')}</textarea>`
+      : `<input class="inp" data-s="shop.${key}.${l}" value="${esc(sh[key][l] || '')}" placeholder="${l === 'ja' ? ph : ''}">`}</div>`).join('')}`;
+  const canShare = !!(navigator.canShare && navigator.canShare({files: [new File(['x'], 'x.json', {type: 'application/json'})]}));
+  return `<div class="top"><h1>お店の設定</h1></div>
+  <div class="two"><div>
+    <div class="card"><h2>お店の名前など</h2>
+      ${ml('name', '店名', false, '例：海鮮食堂 湊')}
+      ${ml('catch', 'キャッチコピー（なくてもOK）', false, '例：港町の朝獲れ魚')}
+      ${ml('note', 'お知らせ・営業時間など（なくてもOK）', true, '例：ラストオーダー 20:30／お通し代 300円')}
+      <label class="f">連絡先（電話・SNSなど。翻訳しません）</label><input class="inp" data-s="shop.contact" value="${esc(sh.contact)}" placeholder="例：Tel 03-XXXX-XXXX">
+      <div class="note">ほかの言語は「翻訳」の画面でまとめて入れることもできます。</div></div>
+    <div class="card"><h2>バックアップ</h2>
+      <div class="small muted" style="margin-bottom:10px">写真もいっしょに1つのファイルにします。最後に保存：${fmt(S.bkAt)}</div>
+      <div class="actbar"><button class="btn pri" data-act="backup">${I('download')}ファイルに保存</button>${canShare ? `<button class="btn" data-act="shareBk">${I('share')}ドライブ・メールに送る</button>` : ''}</div>
+      <label class="btn wide" style="margin-top:10px">${I('upload')}バックアップから戻す／前のツールのデータを読み込む<input type="file" accept=".json,application/json" data-file="restore" hidden></label>
+      <div class="note">前のパソコン版（メニュー作成ツール V3.2 など）で「保存」したファイルもそのまま読み込めます（旧形式も自動で変換）。</div>
+      <button class="btn sm ghost" data-act="wipe" style="color:var(--bad);margin-top:10px">${I('trash')}すべてのデータを消す</button></div>
+  </div><div>
+    <div class="card"><h2>使う言語</h2>
+      ${LANGS.map(l => `<label class="check"><input type="checkbox" data-ch="lang" data-l="${l.c}" ${langs.includes(l.c) ? 'checked' : ''} ${l.c === 'ja' ? 'disabled' : ''}>${l.label} <span class="muted small">${l.jp}</span></label>`).join('')}
+      <div class="note">お客さまの画面にはここでえらんだ言語のボタンが出て、スマホの言語設定に合わせて自動で切りかわります。</div></div>
+    <div class="card"><h2>見た目</h2>
+      <label class="f">テーマの色</label><div class="swatch">${COLORS.map(([c, n]) => `<button class="${sh.color === c ? 'on' : ''}" style="background:${c}" data-act="color" data-v="${c}" aria-label="${n}" title="${n}"></button>`).join('')}</div>
+      <label class="f">文字の雰囲気</label><div class="seg"><button class="${sh.font !== 'serif' ? 'on' : ''}" data-act="font" data-v="sans">ゴシック（すっきり）</button><button class="${sh.font === 'serif' ? 'on' : ''}" data-act="font" data-v="serif" style="font-family:serif">明朝（和風）</button></div></div>
+    <div class="card"><h2>値段の表示</h2><div class="seg">
+      ${[['in','税込'],['out','税抜'],['none','書かない']].map(([v, n]) => `<button class="${sh.tax === v ? 'on' : ''}" data-act="tax" data-v="${v}">${n}</button>`).join('')}</div>
+      <div class="note">お客さまの画面と印刷の下に「${sh.tax === 'none' ? '（何も出ません）' : t(sh.tax === 'out' ? 'taxOut' : 'taxIn', 'ja')}」と各言語で出ます。</div></div>
+  </div></div>`;
+}
+
+/* ---------- 印刷 ---------- */
+function pagePrint() {
+  const p = UI.pr, langs = S.shop.langs;
+  if (!langs.includes(p.lang)) p.lang = 'ja';
+  if (p.lang2 && (!langs.includes(p.lang2) || p.lang2 === p.lang || (p.lang !== 'ja' && p.lang2 === 'ja'))) p.lang2 = '';
+  const seg = (k, opts) => `<div class="seg">${opts.map(([v, n]) => `<button class="${p[k] === v ? 'on' : ''}" data-act="pr" data-k="${k}" data-v="${v}">${n}</button>`).join('')}</div>`;
+  const ck = (k, n, dis) => `<label class="check"><input type="checkbox" data-ch="pr" data-k="${k}" ${p[k] ? 'checked' : ''} ${dis ? 'disabled' : ''}>${n}</label>`;
+  return `<div class="top"><h1>印刷・PDF</h1><button class="btn pri" data-act="printMenu">${I('printer')}印刷・PDFにする</button></div>
+  <div class="pr-grid"><div>
+    <div class="card"><h2>言語</h2>${seg('lang', langs.map(l => [l, LS[l].label]))}
+      <label class="f">下に小さく添える言語</label>${seg('lang2', [['', p.lang === 'ja' ? 'なし' : 'なし（日本語名だけ添える）'], ...langs.filter(l => l !== p.lang && !(p.lang !== 'ja' && l === 'ja')).map(l => [l, LS[l].label])])}</div>
+    <div class="card"><h2>形</h2>${seg('layout', [['photo1', '写真・大'], ['photo2', '写真・2列'], ['text', '文字だけ']])}
+      <label class="f">文字の大きさ</label>${seg('size', [['n', 'ふつう'], ['l', '大きめ']])}
+      ${ck('desc', '説明を載せる')}${ck('alg', 'アレルギーを載せる')}${ck('sold', '売り切れ中のものも載せる')}${ck('qr', 'スマホ用のQRコードを下に入れる' + (S.shop.pubUrl ? '' : '（QR・公開でアドレスを入れると使えます）'), !S.shop.pubUrl)}</div>
+    <div class="note">プリンタの選択で「PDF形式で保存」をえらぶとPDFになります。色が出ないときは「その他の設定」→「背景のグラフィック」をオンに。</div>
+  </div>
+  <div class="pv-wrap"><div class="paper" id="pv">${printMenuHTML()}</div></div></div>`;
+}
+function fitPreview() {
+  const pv = $('#pv'); if (!pv) return;
+  pv.style.zoom = 1;
+  const w = pv.parentElement.clientWidth - 24, pw = pv.offsetWidth;
+  pv.style.zoom = Math.min(1, w / pw);
+}
+window.addEventListener('resize', () => { if (UI.page === 'print') fitPreview(); });
+
+function printMenuHTML() {
+  const p = UI.pr, sh = S.shop, L = p.lang, L2 = p.lang2 || (L !== 'ja' ? 'ja' : '');
+  const sub = o => { if (!L2 || !o) return ''; const a = tr(o, L), b = L2 === 'ja' ? (o.ja || '') : (o[L2] || ''); return b && b !== a ? b : ''; };
+  const items = S.items.filter(i => !i.hidden && (p.sold || !i.soldout));
+  const secs = S.cats.map(c => ({c, items: items.filter(i => i.cat === c.id)})).filter(g => g.items.length);
+  const cls = p.layout === 'photo1' ? 'c1' : p.layout === 'photo2' ? 'c2' : 'txt';
+  const both = k => [t(k, L), L2 ? t(k, L2) : ''].filter((x, i, a) => x && a.indexOf(x) === i).join(' / ');
+  const itemHTML = it => {
+    const u = cls !== 'txt' ? imgUrl(it.img) : '';
+    const opts = it.options.filter(o => tr(o.name, L)).map(o => `${esc(tr(o.name, L))} ${optYen(o.price)}`).join('　');
+    const tags = it.tags.map(k => `<span class="tg" style="background:${TG[k].col}">${esc(tr(TG[k].n, L))}</span>`).join('');
+    const alg = p.alg && it.alg.length ? `<div class="pp-alg">${esc(t('allergens', L))}: ${it.alg.map(k => esc(tr(AG[k].n, L))).join('・')}</div>` : '';
+    return `<div class="pp-it">${u ? `<img src="${u}" alt="">` : ''}<div class="pp-tx">
+      <div class="pp-nm"><b>${esc(tr(it.name, L))}</b><span class="p">${it.market ? esc(t('market', L)) : yen(it.price)}</span></div>
+      ${sub(it.name) ? `<div class="pp-2">${esc(sub(it.name))}</div>` : ''}
+      ${p.desc && tr(it.desc, L) ? `<div class="pp-d">${esc(tr(it.desc, L))}</div>` : ''}
+      ${opts ? `<div class="pp-op">${esc(t('options', L))}: ${opts}</div>` : ''}
+      ${tags ? `<div class="pp-tg">${tags}</div>` : ''}${alg}</div></div>`;
+  };
+  const url = S.shop.pubUrl ? S.shop.pubUrl + '?m' : '';
+  return `<div class="pp ${sh.font === 'serif' ? 'serif' : ''} ${p.size === 'l' ? 'big' : ''}" style="--c:${sh.color}" lang="${LS[L].html}">
+    <div class="pp-h"><h1>${esc(tr(sh.name, L) || 'MENU')}</h1>${sub(sh.name) ? `<div class="s2">${esc(sub(sh.name))}</div>` : ''}
+      ${tr(sh.catch, L) ? `<div class="cc">${esc(tr(sh.catch, L))}</div>` : ''}</div>
+    ${tr(sh.note, L) ? `<div class="pp-note">${esc(tr(sh.note, L))}${sub(sh.note) ? '\n' + esc(sub(sh.note)) : ''}</div>` : ''}
+    ${secs.map(g => `<section class="pp-sec"><h2>${esc(tr(g.c.name, L))}${sub(g.c.name) ? ` <small>${esc(sub(g.c.name))}</small>` : ''}</h2>
+      <div class="pp-list ${cls}">${g.items.map(itemHTML).join('')}</div></section>`).join('') || '<p style="text-align:center;color:#999">メニューがまだありません</p>'}
+    <div class="pp-f">${p.qr && url ? `<div class="q">${qrSvg(url)}</div>` : ''}<div>
+      ${sh.contact ? `<p>${esc(sh.contact)}</p>` : ''}
+      ${p.qr && url ? `<p><b>${esc(both('scan'))}</b></p>` : ''}
+      <p>${[sh.tax !== 'none' ? both(sh.tax === 'out' ? 'taxOut' : 'taxIn') : '', both('photo')].filter(Boolean).map(esc).join('　')}</p>
+      ${p.alg ? `<p>${esc(t('algNote', L))}</p>` : ''}</div></div></div>`;
+}
+function popHTML() {
+  const sh = S.shop, url = sh.pubUrl + '?m';
+  const card = `<div class="pop"><div class="pop-n">${esc(sh.name.ja || '')}</div>${sh.name.en && sh.name.en !== sh.name.ja ? `<div class="pop-n2">${esc(sh.name.en)}</div>` : ''}
+    <div class="pop-m" style="color:${sh.color}">MENU</div><div class="pop-q">${qrSvg(url)}</div>
+    <div class="pop-l">${sh.langs.map(l => `<div lang="${LS[l].html}">${esc(t('scan', l))}</div>`).join('')}</div></div>`;
+  return `<div class="pop-sheet">${card.repeat(4)}</div>`;
+}
+async function doPrint(html, pageCss) {
+  $('#page-style').textContent = pageCss;
+  const pr = $('#print'); pr.innerHTML = html;
+  try { await Promise.all([...pr.querySelectorAll('img')].map(i => i.decode().catch(() => {}))); } catch (e) {}
+  window.print();
+}
+
+/* ---------- QR・公開 ---------- */
+function pageQr() {
+  const sh = S.shop, url = sh.pubUrl, gh = ghFromUrl(url), tok = getTok();
+  const target = url ? url + '?m' : '';
+  const st = UI.pub;
+  let stHTML = '';
+  if (st) {
+    if (st.s === 'busy') stHTML = `<div class="note">${esc(st.m)}</div>`;
+    else if (st.s === 'ok') stHTML = `<div class="note ok">${esc(st.m)}</div>`;
+    else if (st.s === 'old') stHTML = `<div class="note warn">${esc(st.m)}</div>`;
+    else stHTML = `<div class="note bad">${esc(st.m)}</div>`;
+  }
+  return `<div class="top"><h1>QRコード・公開</h1></div>
+  <div class="note" style="margin:0 0 14px">お客さまがQRコードを読み取ると、自分のスマホでメニューが見られます（アプリのインストールは不要・言語は自動で切りかわり）。
+    そのために、メニューをインターネット（このアプリを置いた GitHub Pages）に公開します。</div>
+  <div class="two"><div>
+    <div class="card"><h2>① 公開アドレス</h2>
+      <input class="inp" data-s="shop.pubUrl" data-url value="${esc(url)}" placeholder="https://ユーザー名.github.io/menu/" inputmode="url">
+      <div class="small muted" style="margin-top:6px">このアプリを GitHub Pages に置いたときのアドレスです（くわしくは「使い方.md」）。</div>
+      ${url && !gh ? '<div class="note warn">GitHub Pages のアドレス（https://〜.github.io/〜/）ではないため、②の「公開する」ボタンは使えません。下の「鍵を使わない方法」で公開してください。</div>' : ''}</div>
+    <div class="card"><h2>② メニューを公開する <small>直したら毎回</small></h2>
+      ${unpublished() ? '<div class="note warn" style="margin:0 0 10px">直した内容が、まだ公開されていません。</div>' : (S.pubBuilt ? '<div class="note ok" style="margin:0 0 10px">公開したあと、直したところはありません。</div>' : '')}
+      <label class="check" style="margin-top:0"><input type="checkbox" data-ch="pubImg" ${UI.pubImg ? 'checked' : ''}>写真も公開する（スマホ向けに小さくします）</label>
+      <div class="actbar" style="margin-top:8px"><button class="btn pri" data-act="publish" ${gh && tok ? '' : 'disabled'}>${I('cloud')}公開する</button><button class="btn" data-act="checkPub" ${url ? '' : 'disabled'}>公開中のメニューを確かめる</button></div>
+      ${stHTML}
+      <div class="small muted" style="margin-top:8px">最後に直した：${fmt(S.updated)}　／　最後に公開した：${fmt(S.pubAt)}<br>公開してから、お客さまのスマホに出るまで1〜2分かかります。</div>
+      <details class="more" ${tok ? '' : 'open'}><summary>GitHubの鍵（トークン）${tok ? '：入力ずみ' : '：はじめに1回だけ'}</summary>
+        <div class="small" style="margin:6px 0">「公開する」ボタンでGitHubに書きこむための鍵です。GitHubで<b>このリポジトリだけ・Contents の書きこみだけ</b>を許可した鍵を作って貼りつけてください（作り方は「使い方.md」）。鍵はこのタブレットの中にだけ保存され、バックアップには入りません。</div>
+        <div class="row"><input class="inp grow" type="password" id="tokIn" placeholder="github_pat_…" autocomplete="off" value="${tok ? '••••••••' : ''}">
+        <button class="btn" data-act="saveTok">保存</button>${tok ? '<button class="btn" data-act="delTok" style="color:var(--bad)">消す</button>' : ''}</div>
+        <a class="btn sm ghost" href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener" style="margin-top:6px">${I('ext')}GitHubで鍵を作る画面を開く</a></details>
+      <details class="more"><summary>鍵を使わない方法（ファイルを手でアップロード）</summary>
+        <ol class="small" style="padding-left:20px;margin:8px 0">
+          <li>ダウンロードフォルダに古い <b>menu.json</b> があれば先に消す（あると「menu (1).json」という名前になってしまうため）</li>
+          <li>下のボタンで menu.json を作る</li>
+          <li>GitHub のリポジトリで「Add file」→「Upload files」→ menu.json をえらんで「Commit changes」</li></ol>
+        <div class="actbar"><button class="btn" data-act="buildPub">${I('download')}menu.json を作る</button>
+          ${gh ? `<a class="btn" href="https://github.com/${gh.owner}/${gh.repo}/upload/main" target="_blank" rel="noopener">${I('ext')}アップロード画面を開く</a>` : ''}</div></details></div>
+  </div><div>
+    <div class="card"><h2>③ お客さま用QRコード</h2>
+      ${target ? `<div class="qrbig">${qrSvg(target)}</div><div class="url">${esc(target)}</div>
+        <div class="actbar" style="justify-content:center"><button class="btn" data-act="qrPng">${I('download')}画像で保存</button><button class="btn pri" data-act="printPop">${I('printer')}卓上POPを印刷</button>
+        <a class="btn" href="${esc(target)}" target="_blank" rel="noopener">${I('ext')}ためしに開く</a></div>
+        <div class="note">QRコードは何度メニューを直しても同じです。一度印刷すればずっと使えます。<br>印刷メニューの下にも入れられます（印刷・PDF の画面）。</div>`
+      : '<div class="empty">①に公開アドレスを入れると、ここにQRコードが出ます。</div>'}</div>
+  </div></div>`;
+}
+function qrPng() {
+  const M = QR.encode(S.shop.pubUrl + '?m'); if (!M) return;
+  const n = M.length, q = 4, sc = 12, c = document.createElement('canvas'); c.width = c.height = (n + q * 2) * sc;
+  const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.fillStyle = '#000';
+  for (let y = 0; y < n; y++) for (let i = 0; i < n; i++) if (M[y][i]) x.fillRect((i + q) * sc, (y + q) * sc, sc, sc);
+  c.toBlob(b => download('メニューQRコード.png', b));
+}
+
+/* =========================================================
+   お客さま表示（スマホ ?m ・ タブレットのお客さま表示 共通）
+   ========================================================= */
+let VD = null;  // 表示するデータ {shop,cats,items,updated,img()}
+const VS = {lang: 'ja', avoid: [], kiosk: false};
+function pickLang(langs) {
+  const want = (navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || 'ja']).map(s => s.toLowerCase());
+  for (const w of want) {
+    let c = w.startsWith('ja') ? 'ja' : w.startsWith('en') ? 'en' : w.startsWith('ko') ? 'ko' : w.startsWith('th') ? 'th'
+      : w.startsWith('zh') ? (/(tw|hk|mo|hant)/.test(w) ? 'zh' : 'zhs') : '';
+    if (c && !langs.includes(c) && SIB[c] && langs.includes(SIB[c])) c = SIB[c];
+    if (c && langs.includes(c)) return c;
+    if (c === 'ja') break;
+  }
+  return langs.includes('en') && !want[0].startsWith('ja') ? 'en' : 'ja';
+}
+function viewerHTML() {
+  const D = VD, L = VS.lang, sh = D.shop, langs = sh.langs.filter(c => LS[c]);
+  const avoid = new Set(VS.avoid);
+  const vis = D.items.filter(i => !i.hidden);
+  const blocked = i => i.alg.some(a => avoid.has(a));
+  const groups = D.cats.map(c => ({c, items: vis.filter(i => i.cat === c.id && !blocked(i))})).filter(g => g.items.length);
+  const nHidden = vis.filter(blocked).length;
+  const hasAlg = vis.some(i => i.alg.length);
+  const nm = tr(sh.name, L) || 'Menu';
+  const card = it => {
+    const u = D.img(it.img), n = tr(it.name, L), ja = L !== 'ja' && it.name.ja && it.name.ja !== n ? it.name.ja : '';
+    return `<button class="vcard ${it.soldout ? 'sold' : ''}" data-act="vItem" data-id="${esc(it.id)}">
+      <span class="vimg">${u ? `<img src="${u}" alt="" loading="lazy">` : `<span class="ph" style="background:var(--c)">${esc((it.name.ja || n || '?').slice(0, 1))}</span>`}${it.soldout ? `<span class="soldlab">${esc(t('soldout', L))}</span>` : ''}</span>
+      <span class="vtx">${it.tags.length ? `<span class="vtags">${it.tags.map(k => `<span class="tg" style="background:${TG[k].col}">${esc(tr(TG[k].n, L))}</span>`).join('')}</span>` : ''}
+        <span class="vname">${esc(n)}</span>${ja ? `<span class="vja">${esc(ja)}</span>` : ''}
+        ${tr(it.desc, L) ? `<span class="vdesc">${esc(tr(it.desc, L))}</span>` : ''}
+        <span class="vbot"><span class="vprice">${it.market ? esc(t('market', L)) : yen(it.price)}</span>${it.alg.length ? `<span class="valg">${it.alg.map(k => esc(tr(AG[k].n, L))).join('・')}</span>` : ''}</span></span></button>`;
+  };
+  return `<div class="vw ${sh.font === 'serif' ? 'serif' : ''} ${VS.kiosk ? 'kiosk' : ''}" style="--c:${esc(sh.color)}" lang="${LS[L].html}">
+    <header class="vh"><div class="vh-top"><div class="vh-t"><h1>${esc(nm)}</h1>${tr(sh.catch, L) ? `<div class="vsub">${esc(tr(sh.catch, L))}</div>` : (L !== 'ja' && sh.name.ja !== nm ? `<div class="vsub">${esc(sh.name.ja || '')}</div>` : '')}</div>
+      ${langs.length > 1 ? `<div class="vlang">${langs.map(l => `<button class="${l === L ? 'on' : ''}" data-act="vLang" data-l="${l}" lang="${LS[l].html}">${LS[l].label}</button>`).join('')}</div>` : ''}</div>
+      ${groups.length > 1 ? `<nav class="vcats">${groups.map((g, i) => `<button class="${i === 0 ? 'on' : ''}" data-act="vCat" data-id="${esc(g.c.id)}">${esc(tr(g.c.name, L))}</button>`).join('')}</nav>` : ''}</header>
+    <div class="vmain">
+      ${tr(sh.note, L) ? `<div class="vnote">${esc(tr(sh.note, L))}</div>` : ''}
+      ${nHidden ? `<div class="vnote" style="border-color:#9a3b30">${nHidden}${esc(t('hiding', L))} <button class="btn sm" data-act="vClear" style="margin-left:8px">${esc(t('clear', L))}</button></div>` : ''}
+      ${groups.map(g => `<section class="vsec" id="vc-${esc(g.c.id)}"><h2>${esc(tr(g.c.name, L))}${L !== 'ja' && g.c.name.ja && g.c.name.ja !== tr(g.c.name, L) ? `<small>${esc(g.c.name.ja)}</small>` : ''}</h2>
+        <div class="vgrid">${g.items.map(card).join('')}</div></section>`).join('') || `<div class="vempty">${esc(t('none', L))}</div>`}
+    </div>
+    <footer class="vfoot">${sh.contact ? `<p>${esc(sh.contact)}</p>` : ''}
+      ${sh.tax !== 'none' ? `<p>${esc(t(sh.tax === 'out' ? 'taxOut' : 'taxIn', L))}</p>` : ''}<p>${esc(t('photo', L))}</p>
+      ${hasAlg ? `<p>${esc(t('algNote', L))}</p>` : ''}${D.updated ? `<p>${esc(t('updated', L))}: ${new Date(D.updated).toLocaleDateString(LS[L].html)}</p>` : ''}</footer>
+    ${hasAlg ? `<button class="vfab ${avoid.size ? 'on' : ''}" data-act="vFilter">${I('filter')}${esc(t('allergens', L))}${avoid.size ? ` (${avoid.size})` : ''}</button>` : ''}
+    ${VS.kiosk ? '<button class="kx" id="kx">長押しで<br>もどる</button>' : ''}</div>`;
+}
+let vScrollBound = false;
+function afterViewer() {
+  const h = document.querySelector('.vh');
+  if (h) document.documentElement.style.setProperty('--hh', h.offsetHeight + 'px');
+  document.title = tr(VD.shop.name, VS.lang) || 'Menu';
+  if (!vScrollBound) { vScrollBound = true; window.addEventListener('scroll', onVScroll, {passive: true}); }
+  const kx = $('#kx');
+  if (kx) {
+    let tm = null;
+    const start = e => { e.preventDefault(); kx.classList.add('hold'); tm = setTimeout(exitKiosk, 1500); };
+    const stop = () => { kx.classList.remove('hold'); clearTimeout(tm); };
+    kx.addEventListener('pointerdown', start); ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => kx.addEventListener(ev, stop));
+    kx.addEventListener('contextmenu', e => e.preventDefault());
+  }
+}
+let vsTick = false;
+function onVScroll() {
+  if (vsTick || !document.querySelector('.vcats')) return; vsTick = true;
+  requestAnimationFrame(() => {
+    vsTick = false;
+    const hh = (document.querySelector('.vh') || {}).offsetHeight || 0; let cur = null;
+    document.querySelectorAll('.vsec').forEach(s => { if (s.getBoundingClientRect().top - hh <= 24) cur = s.id.slice(3); });
+    const bs = document.querySelectorAll('.vcats button'); if (!bs.length) return;
+    if (!cur) cur = bs[0].dataset.id;
+    bs.forEach(b => { const on = b.dataset.id === cur; if (on !== b.classList.contains('on')) { b.classList.toggle('on', on); if (on) b.scrollIntoView({block: 'nearest', inline: 'center'}); } });
+  });
+}
+function vDetail(id) {
+  const it = VD.items.find(i => i.id === id); if (!it) return;
+  const L = VS.lang, u = VD.img(it.img), n = tr(it.name, L);
+  openModal(`<div lang="${LS[L].html}" style="--c:${esc(VD.shop.color)}" class="vwd ${VD.shop.font === 'serif' ? 'serif' : ''}">
+    ${u ? `<img class="vd-img" src="${u}" alt="">` : ''}
+    <div class="vd">${it.tags.length ? `<div class="vtags">${it.tags.map(k => `<span class="tg" style="background:${TG[k].col}">${esc(tr(TG[k].n, L))}</span>`).join('')}</div>` : ''}
+      <h3>${esc(n)}</h3>${L !== 'ja' && it.name.ja && it.name.ja !== n ? `<div class="vja">${esc(it.name.ja)}</div>` : ''}
+      <div class="vprice">${it.market ? esc(t('market', L)) : yen(it.price)}${it.soldout ? ` <span class="badge red">${esc(t('soldout', L))}</span>` : ''}</div>
+      ${tr(it.desc, L) ? `<p>${esc(tr(it.desc, L))}</p>` : ''}
+      ${it.options.length ? `<div class="vd-sec"><b>${esc(t('options', L))}</b><ul>${it.options.map(o => `<li><span>${esc(tr(o.name, L))}</span><span>${optYen(o.price)}</span></li>`).join('')}</ul></div>` : ''}
+      ${it.alg.length ? `<div class="vd-sec"><b>${esc(t('allergens', L))}（${esc(t('contains', L))}）</b>${it.alg.map(k => `<span class="algc">${esc(tr(AG[k].n, L))}</span>`).join('')}<div class="vf-note">${esc(t('algNote', L))}</div></div>` : ''}
+      ${L !== 'ja' ? `<div class="vd-staff"><small>${esc(t('staff', L))}</small><div lang="ja">${esc(it.name.ja || n)}</div></div>` : ''}</div>
+    <button class="vd-close" data-act="closeM">${esc(t('close', L))}</button></div>`, true);
+}
+function vFilter() {
+  const L = VS.lang, used = ALG.filter(a => VD.items.some(i => !i.hidden && i.alg.includes(a.k)));
+  openModal(`<div class="vd" lang="${LS[L].html}"><h3 style="font-size:19px">${esc(t('avoid', L))}</h3>
+    <div class="chips alg" style="margin-top:12px">${used.map(a => `<button class="${VS.avoid.includes(a.k) ? 'on' : ''}" data-act="vAvoid" data-k="${a.k}">${esc(tr(a.n, L))}</button>`).join('')}</div>
+    <div class="vf-note">${esc(t('algNote', L))}</div></div>
+    <button class="vd-close" data-act="vFilterDone">${esc(t('close', L))}</button>`, true);
+}
+function setVD(data, imgFn) { VD = Object.assign({}, data, {items: (data.items || []).map(fixItem), cats: data.cats || [], img: imgFn}); VD.shop = Object.assign(defShop(), data.shop); VD.shop.langs = LANGS.map(l => l.c).filter(c => VD.shop.langs.includes(c)); }
+
+// タブレットのお客さま表示
+let wakeLock = null, idleTimer = null;
+async function keepAwake() { try { if ('wakeLock' in navigator && document.visibilityState === 'visible') wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {} }
+function resetIdle() {
+  clearTimeout(idleTimer);
+  if (UI.page !== 'kiosk') return;
+  idleTimer = setTimeout(() => { // 3分さわらないと最初の画面に戻す（次のお客さま用）
+    VS.avoid = []; VS.lang = 'ja'; closeModal(); render(); window.scrollTo(0, 0);
+  }, 180000);
+}
+function startKiosk() {
+  if (!S.items.length) { toast('メニューがまだありません'); return; }
+  setVD({shop: S.shop, cats: S.cats, items: S.items, updated: 0}, imgUrl);
+  VS.kiosk = true; VS.lang = 'ja'; VS.avoid = []; UI.page = 'kiosk';
+  render(); window.scrollTo(0, 0); keepAwake(); resetIdle();
+  if (!matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {});
+}
+function exitKiosk() {
+  UI.page = 'menu'; VS.kiosk = false; clearTimeout(idleTimer);
+  if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  closeModal(); document.title = '多言語メニュー'; render(); window.scrollTo(0, 0);
+}
+document.addEventListener('visibilitychange', () => { if (UI.page === 'kiosk' && document.visibilityState === 'visible') keepAwake(); });
+['pointerdown', 'scroll'].forEach(ev => window.addEventListener(ev, () => { if (UI.page === 'kiosk') resetIdle(); }, {passive: true}));
+
+// スマホ（QRコードから）
+async function startPublicView() {
+  document.body.style.background = '#f8f6f1';
+  const app = $('#app');
+  app.innerHTML = '<div class="vload">…</div>';
+  try {
+    const r = await fetch('menu.json?t=' + Date.now(), {cache: 'no-store'});
+    if (!r.ok) throw new Error(r.status);
+    const d = await r.json();
+    const urls = {}, imgs = d.images || {};
+    setVD(d, id => { if (!id || !imgs[id]) return ''; return urls[id] || (urls[id] = URL.createObjectURL(d2b(imgs[id]))); });
+    const want = new URLSearchParams(location.search).get('l');
+    VS.lang = VD.shop.langs.includes(want) ? want : pickLang(VD.shop.langs);
+    UI.page = 'kiosk'; VS.kiosk = false;
+    render();
+  } catch (e) {
+    const l = pickLang(LANGS.map(x => x.c));
+    app.innerHTML = `<div class="vload">${esc(t('loadErr', l))}${l !== 'ja' ? '<br><br>' + esc(t('loadErr', 'ja')) : ''}<br><br><button class="btn" onclick="location.reload()">↻</button></div>`;
+  }
+}
+
+/* =========================================================
+   操作
+   ========================================================= */
+function leaveEditOk() { return UI.page !== 'edit' || !UI.dirty || confirm('直した内容を保存せずにもどりますか？'); }
+function go(p) { if (!leaveEditOk()) return; UI.page = p; UI.dirty = false; UI.pub = (p === 'qr') ? UI.pub : null; render(); window.scrollTo(0, 0); }
+function newDraft(cat) {
+  if (!S.cats.length) { S.cats.push({id: uid('c'), name: {ja: 'おすすめ', en: 'Recommended', zh: '推薦', zhs: '推荐', ko: '추천', th: 'แนะนำ'}}); save(); }
+  return fixItem({id: uid('i'), cat: cat || S.cats[0].id, price: 0});
+}
+const findItem = id => S.items.find(i => i.id === id);
+
+const A = {
+  go: el => go(el.dataset.p),
+  kiosk: () => { if (leaveEditOk()) startKiosk(); },
+  sample: () => {
+    const d = sampleData(); Object.assign(S.shop, d.shop); S.cats = d.cats; S.items = d.items;
+    S.shop.langs = ['ja', 'en', 'zh', 'zhs', 'ko', 'th']; save(); render(); toast('見本を入れました（お客さま表示で見てみてください）');
+  },
+  newItem: el => { UI.draft = newDraft(el.dataset.cat); UI.draftImg = undefined; UI.dirty = false; UI.page = 'edit'; render(); window.scrollTo(0, 0); },
+  edit: el => { const it = findItem(el.dataset.id); if (!it) return; UI.draft = clone(it); UI.draftImg = undefined; UI.dirty = false; UI.page = 'edit'; render(); window.scrollTo(0, 0); },
+  back: () => { if (!leaveEditOk()) return; UI.dirty = false; UI.draft = null; UI.page = 'menu'; render(); window.scrollTo(0, 0); },
+  saveItem: () => saveEdit(),
+  sold: el => { const it = findItem(el.dataset.id); if (!it) return; it.soldout = !it.soldout; save(); render(); toast(it.soldout ? `「${it.name.ja}」を売り切れにしました` : `「${it.name.ja}」の売り切れを戻しました`); },
+  clearSold: () => { if (!confirm('売り切れをすべて戻しますか？')) return; S.items.forEach(i => i.soldout = false); save(); render(); },
+  mv: el => {
+    const it = findItem(el.dataset.id), k = groupKey(it), sib = S.items.filter(x => groupKey(x) === k);
+    const j = sib.indexOf(it) + Number(el.dataset.d); if (j < 0 || j >= sib.length) return;
+    const a = S.items.indexOf(it), b = S.items.indexOf(sib[j]); [S.items[a], S.items[b]] = [S.items[b], S.items[a]]; save(); render();
+  },
+  rmImg: () => { UI.draftImg = ''; UI.dirty = true; render(); },
+  tg: el => { const a = UI.draft.tags, k = el.dataset.k; UI.draft.tags = a.includes(k) ? a.filter(x => x !== k) : [...a, k]; el.classList.toggle('on'); UI.dirty = true; },
+  ag: el => { const a = UI.draft.alg, k = el.dataset.k; UI.draft.alg = a.includes(k) ? a.filter(x => x !== k) : [...a, k]; el.classList.toggle('on'); UI.dirty = true; },
+  addOpt: () => { UI.draft.options.push({name: {}, price: 0}); UI.dirty = true; render(); const els = document.querySelectorAll('[data-d$=".name.ja"][data-d^="options."]'); if (els.length) els[els.length - 1].focus(); },
+  rmOpt: el => { UI.draft.options.splice(Number(el.dataset.i), 1); UI.dirty = true; render(); },
+  gtd: el => { const d = UI.draft; openTranslate([d.name.ja, d.desc.ja, ...d.options.map(o => o.name.ja)].filter(Boolean).join('\n'), el.dataset.l); },
+  delItem: () => {
+    const d = UI.draft, i = S.items.findIndex(x => x.id === d.id); if (i < 0) return;
+    if (!confirm(`「${S.items[i].name.ja}」を削除しますか？`)) return;
+    const [old] = S.items.splice(i, 1); save(); UI.dirty = false; UI.draft = null; UI.page = 'menu'; render();
+    toast('削除しました', () => { S.items.splice(i, 0, old); save(); render(); });
+  },
+  dupItem: () => {
+    if (UI.dirty && !confirm('直した内容は元のメニューには保存されず、複製のほうに入ります。よろしいですか？')) return;
+    const d = clone(UI.draft), src = UI.draftImg !== undefined ? UI.draftImg : (IMG[d.img] || '');
+    d.id = uid('i'); d.img = ''; d.name.ja = (d.name.ja || '') + '（コピー）';
+    UI.draft = d; UI.draftImg = src || undefined; UI.dirty = true; render(); window.scrollTo(0, 0); toast('複製しました。名前を直して保存してください');
+  },
+  // カテゴリ
+  addCat: () => catModal(null),
+  editCat: el => catModal(S.cats.find(c => c.id === el.dataset.id)),
+  gtm: el => openTranslate(UI.mdraft.name.ja || '', el.dataset.l),
+  saveCat: () => {
+    const c = UI.mdraft; c.name.ja = (c.name.ja || '').trim(); if (!c.name.ja) { toast('日本語の名前を入れてください'); return; }
+    const i = S.cats.findIndex(x => x.id === c.id); if (i >= 0) S.cats[i] = c; else S.cats.push(c);
+    save(); closeModal(); render();
+  },
+  mvCat: el => { const i = Number(el.dataset.i), j = i + Number(el.dataset.d); if (j < 0 || j >= S.cats.length) return; [S.cats[i], S.cats[j]] = [S.cats[j], S.cats[i]]; save(); render(); },
+  delCat: el => {
+    const c = S.cats.find(x => x.id === el.dataset.id), n = S.items.filter(i => i.cat === c.id).length, others = S.cats.filter(x => x.id !== c.id);
+    if (!n) { if (confirm(`カテゴリ「${c.name.ja}」を削除しますか？`)) { S.cats = others; save(); render(); } return; }
+    openModal(`<h2>「${esc(c.name.ja)}」を削除</h2><p>このカテゴリには <b>${n}品</b> のメニューがあります。どうしますか？</p>
+      ${others.length ? `<label class="f">メニューの移し先</label><select class="inp" id="mvTo">${others.map(o => `<option value="${o.id}">${esc(o.name.ja)}</option>`).join('')}</select>
+      <button class="btn pri wide" data-act="delCatMove" data-id="${c.id}">メニューを移してから、カテゴリを削除</button>` : ''}
+      <button class="btn wide" data-act="delCatAll" data-id="${c.id}" style="color:var(--bad)">メニューもいっしょに削除</button>
+      <button class="btn wide" data-act="closeM">やめる</button>`);
+  },
+  delCatMove: el => { const to = $('#mvTo').value; S.items.forEach(i => { if (i.cat === el.dataset.id) i.cat = to; }); S.cats = S.cats.filter(c => c.id !== el.dataset.id); save(); closeModal(); render(); toast('移して削除しました'); },
+  delCatAll: el => {
+    if (!confirm('メニューもいっしょに削除します。よろしいですか？')) return;
+    const id = el.dataset.id, oldC = clone(S.cats), oldI = clone(S.items);
+    S.items = S.items.filter(i => i.cat !== id); S.cats = S.cats.filter(c => c.id !== id); save(); closeModal(); render();
+    toast('削除しました', () => { S.cats = oldC; S.items = oldI; save(); render(); });
+  },
+  closeM: () => closeModal(),
+  // 翻訳
+  tl: el => { UI.tl = el.dataset.l; render(); },
+  gtf: el => { const f = transFields()[Number(el.dataset.i)]; if (f) openTranslate(f.obj.ja, UI.tl); },
+  // 設定
+  color: el => { S.shop.color = el.dataset.v; save(); render(); },
+  font: el => { S.shop.font = el.dataset.v; save(); render(); },
+  tax: el => { S.shop.tax = el.dataset.v; save(); render(); },
+  backup: async () => { const d = await backupData(); download(backupName(), new Blob([JSON.stringify(d)], {type: 'application/json'})); S.bkAt = Date.now(); save(false); render(); },
+  shareBk: async () => {
+    const d = await backupData(), f = new File([JSON.stringify(d)], backupName(), {type: 'application/json'});
+    try { await navigator.share({files: [f], title: 'メニューのバックアップ'}); S.bkAt = Date.now(); save(false); render(); } catch (e) {}
+  },
+  wipe: async () => {
+    if (!confirm('メニュー・写真・設定をすべて消します。元に戻せません。\n（先にバックアップを保存しておくと安心です）\n本当に消しますか？')) return;
+    if (!confirm('本当によろしいですか？')) return;
+    const pubUrl = S.shop.pubUrl; S = defState(); S.shop.pubUrl = pubUrl; IMG = {}; await IDB.clear().catch(() => {}); save(); UI.page = 'menu'; render(); toast('すべて消しました');
+  },
+  // 印刷
+  pr: el => { const k = el.dataset.k; UI.pr[k] = el.dataset.v; render(); },
+  printMenu: () => doPrint(printMenuHTML(), '@page{size:A4;margin:10mm}'),
+  printPop: () => doPrint(popHTML(), '@page{size:A4;margin:0}'),
+  qrPng: () => qrPng(),
+  // 公開
+  saveTok: () => {
+    const v = ($('#tokIn').value || '').trim(); if (!v || /^•+$/.test(v)) { toast('鍵を貼りつけてください'); return; }
+    try { localStorage.setItem(TOK_KEY, v); } catch (e) {} render(); toast('鍵を保存しました');
+  },
+  delTok: () => { if (!confirm('このタブレットから鍵を消しますか？')) return; try { localStorage.removeItem(TOK_KEY); } catch (e) {} render(); },
+  publish: async el => {
+    if (!S.items.length) { toast('メニューがまだありません'); return; }
+    el.disabled = true; UI.pub = {s: 'busy', m: '公開しています…'}; render();
+    try { const kb = await ghPublish(); UI.pub = {s: 'ok', m: `公開しました（${kb}KB）。1〜2分でお客さまのスマホに出ます。`}; }
+    catch (e) { UI.pub = {s: 'err', m: navigator.onLine === false ? 'ネットにつながっていません。つながる場所でもう一度どうぞ。' : (e.message || '公開できませんでした')}; }
+    render();
+  },
+  buildPub: async () => {
+    if (!S.items.length) { toast('メニューがまだありません'); return; }
+    const d = await buildPublic(UI.pubImg), s = JSON.stringify(d);
+    download('menu.json', new Blob([s], {type: 'application/json'}));
+    S.pubBuilt = d.updated; S.pubAt = Date.now(); save(false); render(); toast(`menu.json を作りました（${Math.round(s.length / 1024)}KB）`);
+  },
+  checkPub: async () => {
+    UI.pub = {s: 'busy', m: '確かめています…'}; render();
+    try {
+      const d = await checkPublic();
+      if ((d.updated || 0) >= (S.updated || 0)) UI.pub = {s: 'ok', m: `最新のメニュー（${d.items.length}品）が公開されています。`};
+      else UI.pub = {s: 'old', m: `公開中のメニューは ${fmt(d.updated)} の内容です。公開したばかりなら1〜2分待ってからもう一度。そうでなければ「公開する」を。`};
+    } catch (e) { UI.pub = {s: 'err', m: navigator.onLine === false ? 'ネットにつながっていません。' : 'まだ公開されていないか、アドレスが違うようです。'}; }
+    render();
+  },
+  // お客さま表示
+  vLang: el => { VS.lang = el.dataset.l; const y = window.scrollY; render(); window.scrollTo(0, y); },
+  vCat: el => { const s = document.getElementById('vc-' + el.dataset.id); if (!s) return; const hh = $('.vh').offsetHeight; window.scrollTo({top: s.getBoundingClientRect().top + window.scrollY - hh - 4, behavior: 'smooth'}); },
+  vItem: el => vDetail(el.dataset.id),
+  vFilter: () => vFilter(),
+  vAvoid: el => { const k = el.dataset.k; VS.avoid = VS.avoid.includes(k) ? VS.avoid.filter(x => x !== k) : [...VS.avoid, k]; el.classList.toggle('on'); render(); },
+  vFilterDone: () => { closeModal(); render(); },
+  vClear: () => { VS.avoid = []; render(); },
+};
+
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-act]'); if (!el || el.disabled) return;
+  const f = A[el.dataset.act]; if (f) { e.preventDefault(); f(el, e); }
+});
+document.addEventListener('input', e => {
+  const el = e.target;
+  if (el.dataset.d != null && UI.draft) {
+    let v = el.type === 'checkbox' ? el.checked : el.value;
+    if (el.hasAttribute('data-num')) v = parseInt(v, 10) || 0;
+    setPath(UI.draft, el.dataset.d, v); UI.dirty = true;
+  } else if (el.dataset.m != null && UI.mdraft) setPath(UI.mdraft, el.dataset.m, el.value);
+  else if (el.dataset.s != null && !el.hasAttribute('data-url')) { setPath(S, el.dataset.s, el.value); saveSoon(); }
+  else if (el.dataset.tf != null) { const f = transFields()[Number(el.dataset.tf)]; if (f) { f.obj[UI.tl] = el.value; saveSoon(); } }
+  else if (el.hasAttribute('data-q')) {
+    const q = el.value.trim().toLowerCase();
+    document.querySelectorAll('.grp').forEach(g => {
+      let n = 0; g.querySelectorAll('.it').forEach(r => { const hit = !q || r.dataset.k.includes(q); r.style.display = hit ? '' : 'none'; if (hit) n++; });
+      g.style.display = n || !q ? '' : 'none';
+    });
+  }
+});
+document.addEventListener('change', async e => {
+  const el = e.target;
+  if (el.dataset.d === 'cat' && UI.draft) { UI.draft.cat = el.value; UI.dirty = true; }
+  if (el.dataset.d != null && el.type === 'checkbox' && UI.draft) { setPath(UI.draft, el.dataset.d, el.checked); UI.dirty = true; }
+  if (el.hasAttribute('data-url')) { S.shop.pubUrl = normUrl(el.value); UI.pub = null; save(false); render(); }
+  if (el.dataset.s != null && !el.hasAttribute('data-url')) { clearTimeout(saveTimer); save(); if (el.dataset.s.startsWith('shop.name')) render(); }
+  if (el.dataset.ch === 'lang') {
+    const l = el.dataset.l, set = new Set(S.shop.langs); el.checked ? set.add(l) : set.delete(l); set.add('ja');
+    S.shop.langs = LANGS.map(x => x.c).filter(c => set.has(c)); save(); render();
+  }
+  if (el.dataset.ch === 'tMissing') { UI.tMissing = el.checked; render(); }
+  if (el.dataset.ch === 'pubImg') UI.pubImg = el.checked;
+  if (el.dataset.ch === 'pr') { UI.pr[el.dataset.k] = el.checked; render(); }
+  if (el.dataset.file === 'itemImg' && el.files[0]) {
+    try { const raw = await fileToData(el.files[0]); UI.draftImg = await shrink(raw, 1000, 0.82); UI.dirty = true; render(); }
+    catch (err) { toast('この写真は読み込めませんでした'); }
+  }
+  if (el.dataset.file === 'restore' && el.files[0]) { const f = el.files[0]; el.value = ''; await restoreFile(f); }
+});
+window.addEventListener('beforeunload', e => { if (UI.page === 'edit' && UI.dirty) { e.preventDefault(); e.returnValue = ''; } });
+
+/* =========================================================
+   はじめに
+   ========================================================= */
+const PUBLIC_VIEW = /[?&]m(=|&|$)/.test(location.search);
+(async () => {
+  if (PUBLIC_VIEW) { await startPublicView(); }
+  else {
+    try {
+      await IDB.open(); IMG = await IDB.all();
+      // どのメニューにも使われていない写真を片づける
+      const used = new Set(S.items.map(i => i.img).filter(Boolean));
+      for (const k of Object.keys(IMG)) if (!used.has(k)) { IDB.del(k).catch(() => {}); delete IMG[k]; }
+    } catch (e) { console.warn(e); }
+    if (!S.shop.pubUrl && /\.github\.io$/i.test(location.hostname)) { S.shop.pubUrl = normUrl(location.origin + location.pathname); save(false); }
+    if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+    render();
+  }
+  if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "name": "多言語メニュー",
+  "short_name": "メニュー",
+  "description": "多言語メニューを作って、印刷・お客さま表示・QRコードで見せるアプリ（オフラインで動きます）",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#f4f3ef",
+  "theme_color": "#1f3a6e",
+  "lang": "ja",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
