@@ -576,7 +576,7 @@ function imgUrl(id) { if (!id || !IMG[id]) return ''; return URLS[id] || (URLS[i
    データ
    ========================================================= */
 const KEY = 'menu_pwa_v1', TOK_KEY = 'menu_pwa_gh';
-function defShop() { return {name:{ja:''}, catch:{}, note:{}, contact:'', color:'#1f3a6e', font:'sans', langs:['ja','en','zh','zhs','ko'], tax:'in', pubUrl:''}; }
+function defShop() { return {name:{ja:''}, catch:{}, note:{}, contact:'', color:'#1f3a6e', font:'sans', langs:['ja','en','zh','zhs','ko'], tax:'in', pubUrl:'', dataRepo:''}; }
 function defState() { return {v:1, shop:defShop(), cats:[], items:[], updated:0, pubBuilt:0, bkAt:0}; }
 function fixItem(it) {
   return {id: String(it.id || uid('i')), cat: it.cat || '', price: Number(it.price) || 0, market: !!it.market,
@@ -706,8 +706,8 @@ async function restoreFile(file) {
   } catch (e) { alert('写真を保存できませんでした。'); }
   Object.values(URLS).forEach(u => URL.revokeObjectURL(u)); Object.keys(URLS).forEach(k => delete URLS[k]);
   IMG = Object.assign({}, images);
-  const pubUrl = S.shop.pubUrl;
-  S = next; if (!S.shop.pubUrl) S.shop.pubUrl = pubUrl;
+  const pubUrl = S.shop.pubUrl, repo = S.shop.dataRepo;
+  S = next; if (!S.shop.pubUrl) S.shop.pubUrl = pubUrl; if (!S.shop.dataRepo) S.shop.dataRepo = repo;
   save(); UI.page = 'menu'; render(); toast(msg);
 }
 
@@ -730,12 +730,31 @@ async function buildPublic(withImg) {
     if (!images[it.img]) it.img = '';
     delete it.hidden;
   }
-  const shop = clone(S.shop); delete shop.pubUrl;
+  const shop = clone(S.shop); delete shop.pubUrl; delete shop.dataRepo;
   return {app: 'menu-pwa-public', v: 1, updated: S.updated || Date.now(), shop, cats: clone(S.cats.filter(c => items.some(i => i.cat === c.id))), items, images};
 }
-function ghFromUrl(u) {
-  const m = /^https:\/\/([a-z0-9-]+)\.github\.io\/([^/?#]*)/i.exec(u || ''); if (!m) return null;
-  return {owner: m[1], repo: m[2] || `${m[1]}.github.io`};
+/* メニューの置き場所（お店ごとのリポジトリ）
+   アプリ本体は開発者のリポジトリ1つ。お店のメニュー（menu.json）は、お店ごとの「置き場所リポジトリ」に入れる。
+   お客さま用のアドレスは  アプリのアドレス?m=持ち主/リポジトリ名  （持ち主がアプリと同じなら ?m=リポジトリ名 だけ） */
+const REPO_RE = /^([a-z0-9](?:[a-z0-9-]{0,38}))\/([\w.-]{1,100})$/i;
+function parseRepo(s) {
+  s = String(s || '').trim().replace(/^https?:\/\/(www\.)?github\.com\//i, '').replace(/\.git$/i, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
+  const m = REPO_RE.exec(s.split('/').slice(0, 2).join('/'));
+  return m ? {owner: m[1], repo: m[2], full: `${m[1]}/${m[2]}`} : null;
+}
+const appOwner = () => { const m = /^([a-z0-9-]+)\.github\.io$/i.exec(location.hostname); return m ? m[1].toLowerCase() : ''; };
+function ownerOf(u) { const m = /^https:\/\/([a-z0-9-]+)\.github\.io\//i.exec(u || ''); return m ? m[1].toLowerCase() : ''; }
+// お客さま用のアドレス（QRコードの中身）
+function qrTarget() {
+  const r = parseRepo(S.shop.dataRepo), u = S.shop.pubUrl; if (!r || !u) return '';
+  return u + '?m=' + (r.owner.toLowerCase() === ownerOf(u) ? r.repo : r.full);
+}
+// ?m=… から、menu.json を読む場所を決める
+function menuSrc(m) {
+  if (!m) return 'menu.json?t=' + Date.now();          // 前の形（アプリと同じ場所の menu.json）
+  let full = m.includes('/') ? m : (appOwner() ? `${appOwner()}/${m}` : '');
+  const r = parseRepo(full); if (!r) return '';
+  return `https://raw.githubusercontent.com/${r.owner}/${r.repo}/HEAD/menu.json?t=${Date.now()}`;
 }
 function normUrl(u) {
   u = (u || '').trim(); if (!u) return '';
@@ -750,14 +769,14 @@ function b64utf8(str) {
   return btoa(bin);
 }
 async function ghPublish() {
-  const gh = ghFromUrl(S.shop.pubUrl), tok = getTok();
-  if (!gh) throw new Error('公開アドレスが「https://ユーザー名.github.io/…/」の形ではありません。');
+  const gh = parseRepo(S.shop.dataRepo), tok = getTok();
+  if (!gh) throw new Error('メニューの置き場所（持ち主/リポジトリ名）が入っていません。');
   if (!tok) throw new Error('GitHubの鍵（トークン）が入っていません。');
   const data = await buildPublic(UI.pubImg);
   const json = JSON.stringify(data);
   const api = `https://api.github.com/repos/${gh.owner}/${gh.repo}/contents/menu.json`;
   const h = {Authorization: 'Bearer ' + tok, Accept: 'application/vnd.github+json'};
-  const why = s => s === 401 ? '鍵（トークン）が違うか、期限が切れています。' : (s === 403 || s === 404) ? `鍵に「${gh.owner}/${gh.repo}」へ書き込む許可がないか、リポジトリの名前が違います。` : `GitHubでエラーが起きました（${s}）。`;
+  const why = s => s === 401 ? '鍵（トークン）が違うか、期限が切れています。' : (s === 403 || s === 404) ? `鍵に「${gh.full}」へ書き込む許可がないか、リポジトリの名前が違います。` : s === 409 ? 'リポジトリが空のようです。GitHubでリポジトリを作るときに「Add a README file」をオンにしてください。' : `GitHubでエラーが起きました（${s}）。`;
   let sha;
   const r0 = await fetch(api, {headers: h, cache: 'no-store'});
   if (r0.ok) sha = (await r0.json()).sha; else if (r0.status !== 404) throw new Error(why(r0.status));
@@ -768,7 +787,8 @@ async function ghPublish() {
   return Math.round(json.length / 1024);
 }
 async function checkPublic() {
-  const r = await fetch(S.shop.pubUrl + 'menu.json?t=' + Date.now(), {cache: 'no-store'});
+  const r0 = parseRepo(S.shop.dataRepo); if (!r0) throw new Error('no repo');
+  const r = await fetch(menuSrc(r0.full), {cache: 'no-store'});
   if (!r.ok) throw new Error(r.status);
   return r.json();
 }
@@ -782,7 +802,7 @@ const UI = {
   pr: {lang: 'ja', lang2: '', layout: 'photo1', size: 'n', desc: true, alg: true, sold: true, qr: true},
 };
 const NAV = [['menu','list','メニュー','メニュー'], ['cats','folder','カテゴリ','カテゴリ'], ['trans','globe','翻訳','翻訳'], ['shop','store','お店の設定','お店'], ['print','printer','印刷・PDF','印刷'], ['qr','qr','QR・公開','QR']];
-const unpublished = () => !!S.shop.pubUrl && S.items.length > 0 && S.updated > (S.pubBuilt || 0);
+const unpublished = () => !!S.shop.dataRepo && S.items.length > 0 && S.updated > (S.pubBuilt || 0);
 
 function render() {
   const app = $('#app');
@@ -994,7 +1014,7 @@ function pagePrint() {
       <label class="f">下に小さく添える言語</label>${seg('lang2', [['', p.lang === 'ja' ? 'なし' : 'なし（日本語名だけ添える）'], ...langs.filter(l => l !== p.lang && !(p.lang !== 'ja' && l === 'ja')).map(l => [l, LS[l].label])])}</div>
     <div class="card"><h2>形</h2>${seg('layout', [['photo1', '写真・大'], ['photo2', '写真・2列'], ['text', '文字だけ']])}
       <label class="f">文字の大きさ</label>${seg('size', [['n', 'ふつう'], ['l', '大きめ']])}
-      ${ck('desc', '説明を載せる')}${ck('alg', 'アレルギーを載せる')}${ck('sold', '売り切れ中のものも載せる')}${ck('qr', 'スマホ用のQRコードを下に入れる' + (S.shop.pubUrl ? '' : '（QR・公開でアドレスを入れると使えます）'), !S.shop.pubUrl)}</div>
+      ${ck('desc', '説明を載せる')}${ck('alg', 'アレルギーを載せる')}${ck('sold', '売り切れ中のものも載せる')}${ck('qr', 'スマホ用のQRコードを下に入れる' + (qrTarget() ? '' : '（QR・公開で置き場所を入れると使えます）'), !qrTarget())}</div>
     <div class="note">プリンタの選択で「PDF形式で保存」をえらぶとPDFになります。色が出ないときは「その他の設定」→「背景のグラフィック」をオンに。</div>
   </div>
   <div class="pv-wrap"><div class="paper" id="pv">${printMenuHTML()}</div></div></div>`;
@@ -1026,8 +1046,8 @@ function printMenuHTML() {
       ${opts ? `<div class="pp-op">${esc(t('options', L))}: ${opts}</div>` : ''}
       ${tags ? `<div class="pp-tg">${tags}</div>` : ''}${alg}</div></div>`;
   };
-  const url = S.shop.pubUrl ? S.shop.pubUrl + '?m' : '';
-  return `<div class="pp ${sh.font === 'serif' ? 'serif' : ''} ${p.size === 'l' ? 'big' : ''}" style="--c:${sh.color}" lang="${LS[L].html}">
+  const url = qrTarget();
+  return `<div class="pp${sh.font === 'serif' ? 'serif' : ''} ${p.size === 'l' ? 'big' : ''}" style="--c:${sh.color}" lang="${LS[L].html}">
     <div class="pp-h"><h1>${esc(tr(sh.name, L) || 'MENU')}</h1>${sub(sh.name) ? `<div class="s2">${esc(sub(sh.name))}</div>` : ''}
       ${tr(sh.catch, L) ? `<div class="cc">${esc(tr(sh.catch, L))}</div>` : ''}</div>
     ${tr(sh.note, L) ? `<div class="pp-note">${esc(tr(sh.note, L))}${sub(sh.note) ? '\n' + esc(sub(sh.note)) : ''}</div>` : ''}
@@ -1040,7 +1060,7 @@ function printMenuHTML() {
       ${p.alg ? `<p>${esc(t('algNote', L))}</p>` : ''}</div></div></div>`;
 }
 function popHTML() {
-  const sh = S.shop, url = sh.pubUrl + '?m';
+  const sh = S.shop, url = qrTarget();
   const card = `<div class="pop"><div class="pop-n">${esc(sh.name.ja || '')}</div>${sh.name.en && sh.name.en !== sh.name.ja ? `<div class="pop-n2">${esc(sh.name.en)}</div>` : ''}
     <div class="pop-m" style="color:${sh.color}">MENU</div><div class="pop-q">${qrSvg(url)}</div>
     <div class="pop-l">${sh.langs.map(l => `<div lang="${LS[l].html}">${esc(t('scan', l))}</div>`).join('')}</div></div>`;
@@ -1055,8 +1075,8 @@ async function doPrint(html, pageCss) {
 
 /* ---------- QR・公開 ---------- */
 function pageQr() {
-  const sh = S.shop, url = sh.pubUrl, gh = ghFromUrl(url), tok = getTok();
-  const target = url ? url + '?m' : '';
+  const sh = S.shop, url = sh.pubUrl, gh = parseRepo(sh.dataRepo), tok = getTok();
+  const target = qrTarget(), ready = !!(url && gh && tok);
   const st = UI.pub;
   let stHTML = '';
   if (st) {
@@ -1067,41 +1087,47 @@ function pageQr() {
   }
   return `<div class="top"><h1>QRコード・公開</h1></div>
   <div class="note" style="margin:0 0 14px">お客さまがQRコードを読み取ると、自分のスマホでメニューが見られます（アプリのインストールは不要・言語は自動で切りかわり）。
-    そのために、メニューをインターネット（このアプリを置いた GitHub Pages）に公開します。</div>
+    メニューは、このお店専用の「置き場所」（GitHub のリポジトリ）に公開します。ほかのお店のメニューとは混ざりません。</div>
   <div class="two"><div>
-    <div class="card"><h2>① 公開アドレス</h2>
-      <input class="inp" data-s="shop.pubUrl" data-url value="${esc(url)}" placeholder="https://ユーザー名.github.io/menu/" inputmode="url">
-      <div class="small muted" style="margin-top:6px">このアプリを GitHub Pages に置いたときのアドレスです（くわしくは「使い方.md」）。</div>
-      ${url && !gh ? '<div class="note warn">GitHub Pages のアドレス（https://〜.github.io/〜/）ではないため、②の「公開する」ボタンは使えません。下の「鍵を使わない方法」で公開してください。</div>' : ''}</div>
-    <div class="card"><h2>② メニューを公開する <small>直したら毎回</small></h2>
-      ${unpublished() ? '<div class="note warn" style="margin:0 0 10px">直した内容が、まだ公開されていません。</div>' : (S.pubBuilt ? '<div class="note ok" style="margin:0 0 10px">公開したあと、直したところはありません。</div>' : '')}
+    <div class="card"><h2>メニューを公開する <small>直したら毎回</small></h2>
+      ${!ready ? '<div class="note warn" style="margin:0 0 10px">下の「はじめの設定」がまだ終わっていません。</div>'
+        : unpublished() ? '<div class="note warn" style="margin:0 0 10px">直した内容が、まだ公開されていません。</div>' : (S.pubBuilt ? '<div class="note ok" style="margin:0 0 10px">公開したあと、直したところはありません。</div>' : '')}
       <label class="check" style="margin-top:0"><input type="checkbox" data-ch="pubImg" ${UI.pubImg ? 'checked' : ''}>写真も公開する（スマホ向けに小さくします）</label>
-      <div class="actbar" style="margin-top:8px"><button class="btn pri" data-act="publish" ${gh && tok ? '' : 'disabled'}>${I('cloud')}公開する</button><button class="btn" data-act="checkPub" ${url ? '' : 'disabled'}>公開中のメニューを確かめる</button></div>
+      <div class="actbar" style="margin-top:8px"><button class="btn pri" data-act="publish" ${ready ? '' : 'disabled'}>${I('cloud')}公開する</button><button class="btn" data-act="checkPub" ${gh ? '' : 'disabled'}>公開中のメニューを確かめる</button></div>
       ${stHTML}
-      <div class="small muted" style="margin-top:8px">最後に直した：${fmt(S.updated)}　／　最後に公開した：${fmt(S.pubAt)}<br>公開してから、お客さまのスマホに出るまで1〜2分かかります。</div>
-      <details class="more" ${tok ? '' : 'open'}><summary>GitHubの鍵（トークン）${tok ? '：入力ずみ' : '：はじめに1回だけ'}</summary>
-        <div class="small" style="margin:6px 0">「公開する」ボタンでGitHubに書きこむための鍵です。GitHubで<b>このリポジトリだけ・Contents の書きこみだけ</b>を許可した鍵を作って貼りつけてください（作り方は「使い方.md」）。鍵はこのタブレットの中にだけ保存され、バックアップには入りません。</div>
+      <div class="small muted" style="margin-top:8px">最後に直した：${fmt(S.updated)}　／　最後に公開した：${fmt(S.pubAt)}<br>公開してから、お客さまのスマホに出るまで数分かかることがあります。</div></div>
+    <div class="card"><h2>はじめの設定 <small>お店ごとに1回だけ（開発者がします）</small></h2>
+      <div class="step"><span class="n">1</span><div class="b"><b>アプリのアドレス</b>
+        <input class="inp" data-s="shop.pubUrl" data-url value="${esc(url)}" placeholder="https://ユーザー名.github.io/menu/" inputmode="url" style="margin-top:6px">
+        <div class="small muted" style="margin-top:4px">このアプリを置いた GitHub Pages のアドレス（ふつうは自動で入ります）。すべてのお店で同じです。</div></div></div>
+      <div class="step"><span class="n">2</span><div class="b"><b>このお店のメニューの置き場所</b>
+        <input class="inp" data-s="shop.dataRepo" data-repo value="${esc(sh.dataRepo || '')}" placeholder="持ち主/リポジトリ名　例：yamada/menu-minato" autocapitalize="off" autocorrect="off" spellcheck="false" style="margin-top:6px">
+        <div class="small muted" style="margin-top:4px">お店ごとに別の <b>Public</b> リポジトリ（README 付きで作成）。お店のアカウントでも開発者のアカウントでもOK。</div>
+        ${sh.dataRepo && !gh ? '<div class="note bad">「持ち主/リポジトリ名」の形で入れてください。</div>' : ''}
+        ${gh ? `<a class="btn sm ghost" href="https://github.com/${esc(gh.full)}" target="_blank" rel="noopener">${I('ext')}GitHubで置き場所を開く</a>` : ''}</div></div>
+      <div class="step"><span class="n">3</span><div class="b"><b>GitHubの鍵（トークン）</b> ${tok ? '<span class="badge">入力ずみ</span>' : '<span class="badge warn">まだ</span>'}
+        <div class="small muted" style="margin:4px 0 6px">2の置き場所<b>だけ</b>に、<b>Contents の書きこみだけ</b>を許可した鍵を作って貼りつけてください（作り方は「使い方.md」）。ほかのお店やアプリ本体は書きかえられません。鍵はこのタブレットの中にだけ保存され、バックアップには入りません。</div>
         <div class="row"><input class="inp grow" type="password" id="tokIn" placeholder="github_pat_…" autocomplete="off" value="${tok ? '••••••••' : ''}">
         <button class="btn" data-act="saveTok">保存</button>${tok ? '<button class="btn" data-act="delTok" style="color:var(--bad)">消す</button>' : ''}</div>
-        <a class="btn sm ghost" href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener" style="margin-top:6px">${I('ext')}GitHubで鍵を作る画面を開く</a></details>
+        <a class="btn sm ghost" href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener" style="margin-top:6px">${I('ext')}GitHubで鍵を作る画面を開く</a></div></div>
       <details class="more"><summary>鍵を使わない方法（ファイルを手でアップロード）</summary>
         <ol class="small" style="padding-left:20px;margin:8px 0">
           <li>ダウンロードフォルダに古い <b>menu.json</b> があれば先に消す（あると「menu (1).json」という名前になってしまうため）</li>
           <li>下のボタンで menu.json を作る</li>
-          <li>GitHub のリポジトリで「Add file」→「Upload files」→ menu.json をえらんで「Commit changes」</li></ol>
+          <li>2の置き場所のリポジトリで「Add file」→「Upload files」→ menu.json をえらんで「Commit changes」</li></ol>
         <div class="actbar"><button class="btn" data-act="buildPub">${I('download')}menu.json を作る</button>
-          ${gh ? `<a class="btn" href="https://github.com/${gh.owner}/${gh.repo}/upload/main" target="_blank" rel="noopener">${I('ext')}アップロード画面を開く</a>` : ''}</div></details></div>
+          ${gh ? `<a class="btn" href="https://github.com/${esc(gh.full)}/upload/main" target="_blank" rel="noopener">${I('ext')}アップロード画面を開く</a>` : ''}</div></details></div>
   </div><div>
-    <div class="card"><h2>③ お客さま用QRコード</h2>
+    <div class="card"><h2>このお店のQRコード</h2>
       ${target ? `<div class="qrbig">${qrSvg(target)}</div><div class="url">${esc(target)}</div>
         <div class="actbar" style="justify-content:center"><button class="btn" data-act="qrPng">${I('download')}画像で保存</button><button class="btn pri" data-act="printPop">${I('printer')}卓上POPを印刷</button>
         <a class="btn" href="${esc(target)}" target="_blank" rel="noopener">${I('ext')}ためしに開く</a></div>
         <div class="note">QRコードは何度メニューを直しても同じです。一度印刷すればずっと使えます。<br>印刷メニューの下にも入れられます（印刷・PDF の画面）。</div>`
-      : '<div class="empty">①に公開アドレスを入れると、ここにQRコードが出ます。</div>'}</div>
+      : '<div class="empty">「はじめの設定」の1と2を入れると、ここにQRコードが出ます。</div>'}</div>
   </div></div>`;
 }
 function qrPng() {
-  const M = QR.encode(S.shop.pubUrl + '?m'); if (!M) return;
+  const M = QR.encode(qrTarget()); if (!M) return;
   const n = M.length, q = 4, sc = 12, c = document.createElement('canvas'); c.width = c.height = (n + q * 2) * sc;
   const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.fillStyle = '#000';
   for (let y = 0; y < n; y++) for (let i = 0; i < n; i++) if (M[y][i]) x.fillRect((i + q) * sc, (y + q) * sc, sc, sc);
@@ -1240,7 +1266,9 @@ async function startPublicView() {
   const app = $('#app');
   app.innerHTML = '<div class="vload">…</div>';
   try {
-    const r = await fetch('menu.json?t=' + Date.now(), {cache: 'no-store'});
+    const src = menuSrc(new URLSearchParams(location.search).get('m'));
+    if (!src) throw new Error('bad m');
+    const r = await fetch(src, {cache: 'no-store'});
     if (!r.ok) throw new Error(r.status);
     const d = await r.json();
     const urls = {}, imgs = d.images || {};
@@ -1344,7 +1372,7 @@ const A = {
   wipe: async () => {
     if (!confirm('メニュー・写真・設定をすべて消します。元に戻せません。\n（先にバックアップを保存しておくと安心です）\n本当に消しますか？')) return;
     if (!confirm('本当によろしいですか？')) return;
-    const pubUrl = S.shop.pubUrl; S = defState(); S.shop.pubUrl = pubUrl; IMG = {}; await IDB.clear().catch(() => {}); save(); UI.page = 'menu'; render(); toast('すべて消しました');
+    const pubUrl = S.shop.pubUrl, repo = S.shop.dataRepo; S = defState(); S.shop.pubUrl = pubUrl; S.shop.dataRepo = repo; IMG = {}; await IDB.clear().catch(() => {}); save(); UI.page = 'menu'; render(); toast('すべて消しました');
   },
   // 印刷
   pr: el => { const k = el.dataset.k; UI.pr[k] = el.dataset.v; render(); },
@@ -1360,7 +1388,7 @@ const A = {
   publish: async el => {
     if (!S.items.length) { toast('メニューがまだありません'); return; }
     el.disabled = true; UI.pub = {s: 'busy', m: '公開しています…'}; render();
-    try { const kb = await ghPublish(); UI.pub = {s: 'ok', m: `公開しました（${kb}KB）。1〜2分でお客さまのスマホに出ます。`}; }
+    try { const kb = await ghPublish(); UI.pub = {s: 'ok', m: `公開しました（${kb}KB）。数分でお客さまのスマホに出ます。`}; }
     catch (e) { UI.pub = {s: 'err', m: navigator.onLine === false ? 'ネットにつながっていません。つながる場所でもう一度どうぞ。' : (e.message || '公開できませんでした')}; }
     render();
   },
@@ -1400,7 +1428,7 @@ document.addEventListener('input', e => {
     if (el.hasAttribute('data-num')) v = parseInt(v, 10) || 0;
     setPath(UI.draft, el.dataset.d, v); UI.dirty = true;
   } else if (el.dataset.m != null && UI.mdraft) setPath(UI.mdraft, el.dataset.m, el.value);
-  else if (el.dataset.s != null && !el.hasAttribute('data-url')) { setPath(S, el.dataset.s, el.value); saveSoon(); }
+  else if (el.dataset.s != null && !el.hasAttribute('data-url') && !el.hasAttribute('data-repo')) { setPath(S, el.dataset.s, el.value); saveSoon(); }
   else if (el.dataset.tf != null) { const f = transFields()[Number(el.dataset.tf)]; if (f) { f.obj[UI.tl] = el.value; saveSoon(); } }
   else if (el.hasAttribute('data-q')) {
     const q = el.value.trim().toLowerCase();
@@ -1415,7 +1443,8 @@ document.addEventListener('change', async e => {
   if (el.dataset.d === 'cat' && UI.draft) { UI.draft.cat = el.value; UI.dirty = true; }
   if (el.dataset.d != null && el.type === 'checkbox' && UI.draft) { setPath(UI.draft, el.dataset.d, el.checked); UI.dirty = true; }
   if (el.hasAttribute('data-url')) { S.shop.pubUrl = normUrl(el.value); UI.pub = null; save(false); render(); }
-  if (el.dataset.s != null && !el.hasAttribute('data-url')) { clearTimeout(saveTimer); save(); if (el.dataset.s.startsWith('shop.name')) render(); }
+  if (el.hasAttribute('data-repo')) { const r = parseRepo(el.value); S.shop.dataRepo = r ? r.full : el.value.trim(); UI.pub = null; S.pubBuilt = 0; S.pubAt = 0; save(false); render(); }
+  if (el.dataset.s != null && !el.hasAttribute('data-url') && !el.hasAttribute('data-repo')) { clearTimeout(saveTimer); save(); if (el.dataset.s.startsWith('shop.name')) render(); }
   if (el.dataset.ch === 'lang') {
     const l = el.dataset.l, set = new Set(S.shop.langs); el.checked ? set.add(l) : set.delete(l); set.add('ja');
     S.shop.langs = LANGS.map(x => x.c).filter(c => set.has(c)); save(); render();
