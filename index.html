@@ -1211,7 +1211,7 @@ function qrPng() {
    お客さま表示（スマホ ?m ・ タブレットのお客さま表示 共通）
    ========================================================= */
 let VD = null;  // 表示するデータ {shop,cats,items,updated,img()}
-const VS = {lang: 'ja', avoid: [], kiosk: false};
+const VS = {lang: 'ja', avoid: [], kiosk: false, cat: ''};   // cat：'' は「すべて」
 function pickLang(langs) {
   const want = (navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || 'ja']).map(s => s.toLowerCase());
   for (const w of want) {
@@ -1229,7 +1229,11 @@ function viewerHTML() {
   const vis = D.items.filter(i => !i.hidden);
   const blocked = i => i.alg.some(a => avoid.has(a));
   const now = tokyoMin();
-  const groups = D.cats.filter(c => catOpen(c, now)).map(c => ({c, items: sortIn(c, vis.filter(i => i.cats.includes(c.id) && !blocked(i)))})).filter(g => g.items.length);
+  // 選べるカテゴリ（いま出す時間で、メニューが入っているもの）
+  const avail = D.cats.filter(c => catOpen(c, now) && vis.some(i => i.cats.includes(c.id)));
+  if (VS.cat && !avail.some(c => c.id === VS.cat)) VS.cat = '';      // 時間外になった・消えたときは「すべて」に戻す
+  // 「すべて」のときは全部、カテゴリを選んだときはそのカテゴリだけ
+  const groups = avail.filter(c => !VS.cat || c.id === VS.cat).map(c => ({c, items: sortIn(c, vis.filter(i => i.cats.includes(c.id) && !blocked(i)))})).filter(g => g.items.length);
   // 時間外でいまは出していないカテゴリ（「ランチ 11:00〜14:00」と小さく知らせる）
   const closed = D.cats.filter(c => !catOpen(c, now) && vis.some(i => i.cats.includes(c.id)));
   const nHidden = vis.filter(blocked).length;
@@ -1247,13 +1251,13 @@ function viewerHTML() {
   return `<div class="vw ${sh.font === 'serif' ? 'serif' : ''} ${VS.kiosk ? 'kiosk' : ''}" style="--c:${esc(sh.color)}" lang="${LS[L].html}">
     <header class="vh"><div class="vh-top"><div class="vh-t"><h1>${esc(nm)}</h1>${tr(sh.catch, L) ? `<div class="vsub">${esc(tr(sh.catch, L))}</div>` : (L !== 'ja' && sh.name.ja !== nm ? `<div class="vsub">${esc(sh.name.ja || '')}</div>` : '')}</div>
       ${langs.length > 1 ? `<div class="vlang">${langs.map(l => `<button class="${l === L ? 'on' : ''}" data-act="vLang" data-l="${l}" lang="${LS[l].html}">${LS[l].label}</button>`).join('')}</div>` : ''}</div>
-      ${groups.length > 1 ? `<nav class="vcats">${groups.map((g, i) => `<button class="${i === 0 ? 'on' : ''}" data-act="vCat" data-id="${esc(g.c.id)}">${esc(tr(g.c.name, L))}</button>`).join('')}</nav>` : ''}</header>
+      ${avail.length > 1 ? `<nav class="vcats"><button class="${VS.cat ? '' : 'on'}" data-act="vCat" data-id="">${esc(t('all', L))}</button>${avail.map(c => `<button class="${VS.cat === c.id ? 'on' : ''}" data-act="vCat" data-id="${esc(c.id)}">${esc(tr(c.name, L))}</button>`).join('')}</nav>` : ''}</header>
     <div class="vmain">
       ${tr(sh.note, L) ? `<div class="vnote">${esc(tr(sh.note, L))}</div>` : ''}
       ${nHidden ? `<div class="vnote" style="border-color:#9a3b30">${nHidden}${esc(t('hiding', L))} <button class="btn sm" data-act="vClear" style="margin-left:8px">${esc(t('clear', L))}</button></div>` : ''}
       ${groups.map(g => `<section class="vsec" id="vc-${esc(g.c.id)}"><h2>${esc(tr(g.c.name, L))}${L !== 'ja' && g.c.name.ja && g.c.name.ja !== tr(g.c.name, L) ? `<small>${esc(g.c.name.ja)}</small>` : ''}</h2>
         <div class="vgrid">${g.items.map(card).join('')}</div></section>`).join('') || `<div class="vempty">${esc(t('none', L))}</div>`}
-      ${closed.length ? `<div class="vtime">${closed.map(c => `<div>🕐 ${esc(tr(c.name, L))}　${esc(timeTxt(c).replace('〜', ' – '))}<small>${esc(t('timeOnly', L))}</small></div>`).join('')}</div>` : ''}
+      ${closed.length && !VS.cat ? `<div class="vtime">${closed.map(c => `<div>🕐 ${esc(tr(c.name, L))}　${esc(timeTxt(c).replace('〜', ' – '))}<small>${esc(t('timeOnly', L))}</small></div>`).join('')}</div>` : ''}
     </div>
     <footer class="vfoot">${sh.contact ? `<p>${esc(sh.contact)}</p>` : ''}
       ${sh.tax !== 'none' ? `<p>${esc(t(sh.tax === 'out' ? 'taxOut' : 'taxIn', L))}</p>` : ''}<p>${esc(t('photo', L))}</p>
@@ -1269,13 +1273,11 @@ setInterval(() => {
   if (openKey && k !== openKey) { const y = window.scrollY; render(); window.scrollTo(0, y); }
   openKey = k;
 }, 30000);
-let vScrollBound = false;
 function afterViewer() {
   const h = document.querySelector('.vh');
   if (h) document.documentElement.style.setProperty('--hh', h.offsetHeight + 'px');
   document.title = tr(VD.shop.name, VS.lang) || 'Menu';
-  if (!vScrollBound) { vScrollBound = true; window.addEventListener('scroll', onVScroll, {passive: true}); }
-  requestAnimationFrame(() => { if (Date.now() >= vLockUntil) onVScroll(); else if (vPick) setCatChip(vPick); });   // 言語を変えたあとも強調を合わせる
+  const on = document.querySelector('.vcats button.on'); if (on) on.scrollIntoView({block: 'nearest', inline: 'center'});
   const kx = $('#kx');
   if (kx) {
     let tm = null;
@@ -1284,35 +1286,6 @@ function afterViewer() {
     kx.addEventListener('pointerdown', start); ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => kx.addEventListener(ev, stop));
     kx.addEventListener('contextmenu', e => e.preventDefault());
   }
-}
-// カテゴリのボタンの強調（いま見ている欄）
-let vsTick = false, vPick = '', vLockUntil = 0;
-function setCatChip(id) {
-  document.querySelectorAll('.vcats button').forEach(b => {
-    const on = b.dataset.id === id;
-    if (on !== b.classList.contains('on')) { b.classList.toggle('on', on); if (on) b.scrollIntoView({block: 'nearest', inline: 'center'}); }
-  });
-}
-function onVScroll() {
-  if (!document.querySelector('.vcats')) return;
-  // ボタンを押して動いている間は、押したカテゴリのまま
-  if (Date.now() < vLockUntil) { vLockUntil = Math.max(vLockUntil, Date.now() + 250); return; }
-  if (vsTick) return; vsTick = true;
-  requestAnimationFrame(() => {
-    vsTick = false;
-    const hh = (document.querySelector('.vh') || {}).offsetHeight || 0, secs = [...document.querySelectorAll('.vsec')];
-    if (!secs.length) return;
-    let cur = secs[0].id.slice(3);
-    secs.forEach(s => { if (s.getBoundingClientRect().top - hh <= 24) cur = s.id.slice(3); });
-    // いちばん下まで来たとき：下のほうの欄は上まで来られないので、押したカテゴリ（見えていれば）か、いちばん下の欄にする
-    const atBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4;
-    if (atBottom) {
-      const picked = vPick && document.getElementById('vc-' + vPick);
-      const visible = picked && picked.getBoundingClientRect().top < window.innerHeight && picked.getBoundingClientRect().bottom > hh;
-      cur = visible ? vPick : secs[secs.length - 1].id.slice(3);
-    } else vPick = '';
-    setCatChip(cur);
-  });
 }
 function vDetail(id) {
   const it = VD.items.find(i => i.id === id); if (!it) return;
@@ -1344,13 +1317,13 @@ function resetIdle() {
   clearTimeout(idleTimer);
   if (UI.page !== 'kiosk') return;
   idleTimer = setTimeout(() => { // 3分さわらないと最初の画面に戻す（次のお客さま用）
-    VS.avoid = []; VS.lang = 'ja'; closeModal(); render(); window.scrollTo(0, 0);
+    VS.avoid = []; VS.lang = 'ja'; VS.cat = ''; closeModal(); render(); window.scrollTo(0, 0);
   }, 180000);
 }
 function startKiosk() {
   if (!S.items.length) { toast('メニューがまだありません'); return; }
   setVD({shop: S.shop, cats: S.cats, items: S.items, updated: 0}, imgUrl);
-  VS.kiosk = true; VS.lang = 'ja'; VS.avoid = []; UI.page = 'kiosk';
+  VS.kiosk = true; VS.lang = 'ja'; VS.avoid = []; VS.cat = ''; UI.page = 'kiosk';
   render(); window.scrollTo(0, 0); keepAwake(); resetIdle();
   if (!matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {});
 }
@@ -1550,9 +1523,8 @@ const A = {
   // お客さま表示
   vLang: el => { VS.lang = el.dataset.l; const y = window.scrollY; render(); window.scrollTo(0, y); },
   vCat: el => {
-    const id = el.dataset.id, s = document.getElementById('vc-' + id); if (!s) return;
-    vPick = id; vLockUntil = Date.now() + 700; setCatChip(id);
-    const hh = $('.vh').offsetHeight; window.scrollTo({top: s.getBoundingClientRect().top + window.scrollY - hh - 4, behavior: 'smooth'});
+    // 「すべて」か、えらんだカテゴリだけを表示して、いちばん上から見せる
+    VS.cat = el.dataset.id || ''; render(); window.scrollTo(0, 0);
   },
   vItem: el => vDetail(el.dataset.id),
   vFilter: () => vFilter(),
