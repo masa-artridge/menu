@@ -1275,6 +1275,7 @@ function afterViewer() {
   if (h) document.documentElement.style.setProperty('--hh', h.offsetHeight + 'px');
   document.title = tr(VD.shop.name, VS.lang) || 'Menu';
   if (!vScrollBound) { vScrollBound = true; window.addEventListener('scroll', onVScroll, {passive: true}); }
+  requestAnimationFrame(() => { if (Date.now() >= vLockUntil) onVScroll(); else if (vPick) setCatChip(vPick); });   // 言語を変えたあとも強調を合わせる
   const kx = $('#kx');
   if (kx) {
     let tm = null;
@@ -1284,16 +1285,33 @@ function afterViewer() {
     kx.addEventListener('contextmenu', e => e.preventDefault());
   }
 }
-let vsTick = false;
+// カテゴリのボタンの強調（いま見ている欄）
+let vsTick = false, vPick = '', vLockUntil = 0;
+function setCatChip(id) {
+  document.querySelectorAll('.vcats button').forEach(b => {
+    const on = b.dataset.id === id;
+    if (on !== b.classList.contains('on')) { b.classList.toggle('on', on); if (on) b.scrollIntoView({block: 'nearest', inline: 'center'}); }
+  });
+}
 function onVScroll() {
-  if (vsTick || !document.querySelector('.vcats')) return; vsTick = true;
+  if (!document.querySelector('.vcats')) return;
+  // ボタンを押して動いている間は、押したカテゴリのまま
+  if (Date.now() < vLockUntil) { vLockUntil = Math.max(vLockUntil, Date.now() + 250); return; }
+  if (vsTick) return; vsTick = true;
   requestAnimationFrame(() => {
     vsTick = false;
-    const hh = (document.querySelector('.vh') || {}).offsetHeight || 0; let cur = null;
-    document.querySelectorAll('.vsec').forEach(s => { if (s.getBoundingClientRect().top - hh <= 24) cur = s.id.slice(3); });
-    const bs = document.querySelectorAll('.vcats button'); if (!bs.length) return;
-    if (!cur) cur = bs[0].dataset.id;
-    bs.forEach(b => { const on = b.dataset.id === cur; if (on !== b.classList.contains('on')) { b.classList.toggle('on', on); if (on) b.scrollIntoView({block: 'nearest', inline: 'center'}); } });
+    const hh = (document.querySelector('.vh') || {}).offsetHeight || 0, secs = [...document.querySelectorAll('.vsec')];
+    if (!secs.length) return;
+    let cur = secs[0].id.slice(3);
+    secs.forEach(s => { if (s.getBoundingClientRect().top - hh <= 24) cur = s.id.slice(3); });
+    // いちばん下まで来たとき：下のほうの欄は上まで来られないので、押したカテゴリ（見えていれば）か、いちばん下の欄にする
+    const atBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4;
+    if (atBottom) {
+      const picked = vPick && document.getElementById('vc-' + vPick);
+      const visible = picked && picked.getBoundingClientRect().top < window.innerHeight && picked.getBoundingClientRect().bottom > hh;
+      cur = visible ? vPick : secs[secs.length - 1].id.slice(3);
+    } else vPick = '';
+    setCatChip(cur);
   });
 }
 function vDetail(id) {
@@ -1531,7 +1549,11 @@ const A = {
   },
   // お客さま表示
   vLang: el => { VS.lang = el.dataset.l; const y = window.scrollY; render(); window.scrollTo(0, y); },
-  vCat: el => { const s = document.getElementById('vc-' + el.dataset.id); if (!s) return; const hh = $('.vh').offsetHeight; window.scrollTo({top: s.getBoundingClientRect().top + window.scrollY - hh - 4, behavior: 'smooth'}); },
+  vCat: el => {
+    const id = el.dataset.id, s = document.getElementById('vc-' + id); if (!s) return;
+    vPick = id; vLockUntil = Date.now() + 700; setCatChip(id);
+    const hh = $('.vh').offsetHeight; window.scrollTo({top: s.getBoundingClientRect().top + window.scrollY - hh - 4, behavior: 'smooth'});
+  },
   vItem: el => vDetail(el.dataset.id),
   vFilter: () => vFilter(),
   vAvoid: el => { const k = el.dataset.k; VS.avoid = VS.avoid.includes(k) ? VS.avoid.filter(x => x !== k) : [...VS.avoid, k]; el.classList.toggle('on'); render(); },
