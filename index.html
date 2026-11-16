@@ -749,12 +749,28 @@ function qrTarget() {
   const r = parseRepo(S.shop.dataRepo), u = S.shop.pubUrl; if (!r || !u) return '';
   return u + '?m=' + (r.owner.toLowerCase() === ownerOf(u) ? r.repo : r.full);
 }
-// ?m=… から、menu.json を読む場所を決める
-function menuSrc(m) {
-  if (!m) return 'menu.json?t=' + Date.now();          // 前の形（アプリと同じ場所の menu.json）
-  let full = m.includes('/') ? m : (appOwner() ? `${appOwner()}/${m}` : '');
-  const r = parseRepo(full); if (!r) return '';
-  return `https://raw.githubusercontent.com/${r.owner}/${r.repo}/HEAD/menu.json?t=${Date.now()}`;
+// ?m=… から、menu.json を読む場所を決める（上から順にためす）
+//  1. GitHub API … 公開した直後でも最新が出る（ただし同じ回線から1時間60回まで）
+//  2. raw.githubusercontent.com … 回数の上限なし（ただし最大5分古いことがある）
+function menuSrcs(m) {
+  if (!m) return [{url: 'menu.json?t=' + Date.now()}];   // 前の形（アプリと同じ場所の menu.json）
+  const full = m.includes('/') ? m : (appOwner() ? `${appOwner()}/${m}` : '');
+  const r = parseRepo(full); if (!r) return [];
+  return [{url: `https://api.github.com/repos/${r.owner}/${r.repo}/contents/menu.json`, api: true},
+          {url: `https://raw.githubusercontent.com/${r.owner}/${r.repo}/HEAD/menu.json`}];
+}
+async function loadMenu(m, tok) {
+  let last = new Error('no source');
+  for (const s of menuSrcs(m)) {
+    try {
+      const h = s.api ? Object.assign({Accept: 'application/vnd.github.raw+json'}, tok ? {Authorization: 'Bearer ' + tok} : {}) : {};
+      const r = await fetch(s.url, {cache: 'no-store', headers: h});
+      if (r.ok) return await r.json();
+      last = new Error(r.status);
+      if (r.status === 404) break;   // まだ公開されていない
+    } catch (e) { last = e; }
+  }
+  throw last;
 }
 function normUrl(u) {
   u = (u || '').trim(); if (!u) return '';
@@ -788,9 +804,7 @@ async function ghPublish() {
 }
 async function checkPublic() {
   const r0 = parseRepo(S.shop.dataRepo); if (!r0) throw new Error('no repo');
-  const r = await fetch(menuSrc(r0.full), {cache: 'no-store'});
-  if (!r.ok) throw new Error(r.status);
-  return r.json();
+  return loadMenu(r0.full, getTok());   // 鍵があれば回数の上限を気にせず最新を確かめられる
 }
 
 /* =========================================================
@@ -907,7 +921,7 @@ async function saveEdit() {
   d.options = d.options.filter(o => (o.name.ja || '').trim() || o.price);
   const i = S.items.findIndex(x => x.id === d.id);
   if (i >= 0) S.items[i] = d; else S.items.push(d);
-  save(); UI.draft = null; UI.draftImg = undefined; UI.dirty = false; UI.page = 'menu'; render(); window.scrollTo(0, 0); toast('保存しました');
+  save(); UI.draft = null; UI.draftImg = undefined; UI.dirty = false; UI.page = 'menu'; render(); window.scrollTo(0, 0); toast('保存しました'); setTimeout(tryReload, 1200);
 }
 
 /* ---------- カテゴリ ---------- */
@@ -1095,7 +1109,7 @@ function pageQr() {
       <label class="check" style="margin-top:0"><input type="checkbox" data-ch="pubImg" ${UI.pubImg ? 'checked' : ''}>写真も公開する（スマホ向けに小さくします）</label>
       <div class="actbar" style="margin-top:8px"><button class="btn pri" data-act="publish" ${ready ? '' : 'disabled'}>${I('cloud')}公開する</button><button class="btn" data-act="checkPub" ${gh ? '' : 'disabled'}>公開中のメニューを確かめる</button></div>
       ${stHTML}
-      <div class="small muted" style="margin-top:8px">最後に直した：${fmt(S.updated)}　／　最後に公開した：${fmt(S.pubAt)}<br>公開してから、お客さまのスマホに出るまで数分かかることがあります。</div></div>
+      <div class="small muted" style="margin-top:8px">最後に直した：${fmt(S.updated)}　／　最後に公開した：${fmt(S.pubAt)}<br>公開すると、お客さまのスマホにはすぐ出ます（開いたままのスマホも、画面に戻ったときに新しくなります）。</div></div>
     <div class="card"><h2>はじめの設定 <small>お店ごとに1回だけ（開発者がします）</small></h2>
       <div class="step"><span class="n">1</span><div class="b"><b>アプリのアドレス</b>
         <input class="inp" data-s="shop.pubUrl" data-url value="${esc(url)}" placeholder="https://ユーザー名.github.io/menu/" inputmode="url" style="margin-top:6px">
@@ -1255,28 +1269,35 @@ function exitKiosk() {
   UI.page = 'menu'; VS.kiosk = false; clearTimeout(idleTimer);
   if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-  closeModal(); document.title = '多言語メニュー'; render(); window.scrollTo(0, 0);
+  closeModal(); document.title = '多言語メニュー'; render(); window.scrollTo(0, 0); tryReload();
 }
 document.addEventListener('visibilitychange', () => { if (UI.page === 'kiosk' && document.visibilityState === 'visible') keepAwake(); });
 ['pointerdown', 'scroll'].forEach(ev => window.addEventListener(ev, () => { if (UI.page === 'kiosk') resetIdle(); }, {passive: true}));
 
 // スマホ（QRコードから）
+let pubLoadedAt = 0;
+function showPublic(d, first) {
+  pubLoadedAt = Date.now();
+  const urls = {}, imgs = d.images || {};
+  setVD(d, id => { if (!id || !imgs[id]) return ''; return urls[id] || (urls[id] = URL.createObjectURL(d2b(imgs[id]))); });
+  if (first) { const want = new URLSearchParams(location.search).get('l'); VS.lang = VD.shop.langs.includes(want) ? want : pickLang(VD.shop.langs); }
+  else if (!VD.shop.langs.includes(VS.lang)) VS.lang = pickLang(VD.shop.langs);
+  UI.page = 'kiosk'; VS.kiosk = false;
+  render();
+}
 async function startPublicView() {
   document.body.style.background = '#f8f6f1';
   const app = $('#app');
   app.innerHTML = '<div class="vload">…</div>';
   try {
-    const src = menuSrc(new URLSearchParams(location.search).get('m'));
-    if (!src) throw new Error('bad m');
-    const r = await fetch(src, {cache: 'no-store'});
-    if (!r.ok) throw new Error(r.status);
-    const d = await r.json();
-    const urls = {}, imgs = d.images || {};
-    setVD(d, id => { if (!id || !imgs[id]) return ''; return urls[id] || (urls[id] = URL.createObjectURL(d2b(imgs[id]))); });
-    const want = new URLSearchParams(location.search).get('l');
-    VS.lang = VD.shop.langs.includes(want) ? want : pickLang(VD.shop.langs);
-    UI.page = 'kiosk'; VS.kiosk = false;
-    render();
+    const m = new URLSearchParams(location.search).get('m');
+    showPublic(await loadMenu(m), true);
+    // スマホに戻ってきたとき（1分以上たっていれば）最新のメニューに入れかえる（売り切れなどがすぐ出るように）
+    document.addEventListener('visibilitychange', async () => {
+      if (document.visibilityState !== 'visible' || Date.now() - pubLoadedAt < 60000) return;
+      pubLoadedAt = Date.now();
+      try { const d = await loadMenu(m); if ((d.updated || 0) !== (VD.updated || 0)) { const y = window.scrollY; showPublic(d, false); window.scrollTo(0, y); } } catch (e) {}
+    });
   } catch (e) {
     const l = pickLang(LANGS.map(x => x.c));
     app.innerHTML = `<div class="vload">${esc(t('loadErr', l))}${l !== 'ja' ? '<br><br>' + esc(t('loadErr', 'ja')) : ''}<br><br><button class="btn" onclick="location.reload()">↻</button></div>`;
@@ -1287,7 +1308,7 @@ async function startPublicView() {
    操作
    ========================================================= */
 function leaveEditOk() { return UI.page !== 'edit' || !UI.dirty || confirm('直した内容を保存せずにもどりますか？'); }
-function go(p) { if (!leaveEditOk()) return; UI.page = p; UI.dirty = false; UI.pub = (p === 'qr') ? UI.pub : null; render(); window.scrollTo(0, 0); }
+function go(p) { if (!leaveEditOk()) return; UI.page = p; UI.dirty = false; UI.pub = (p === 'qr') ? UI.pub : null; render(); window.scrollTo(0, 0); tryReload(); }
 function newDraft(cat) {
   if (!S.cats.length) { S.cats.push({id: uid('c'), name: {ja: 'おすすめ', en: 'Recommended', zh: '推薦', zhs: '推荐', ko: '추천', th: 'แนะนำ'}}); save(); }
   return fixItem({id: uid('i'), cat: cat || S.cats[0].id, price: 0});
@@ -1388,7 +1409,7 @@ const A = {
   publish: async el => {
     if (!S.items.length) { toast('メニューがまだありません'); return; }
     el.disabled = true; UI.pub = {s: 'busy', m: '公開しています…'}; render();
-    try { const kb = await ghPublish(); UI.pub = {s: 'ok', m: `公開しました（${kb}KB）。数分でお客さまのスマホに出ます。`}; }
+    try { const kb = await ghPublish(); UI.pub = {s: 'ok', m: `公開しました（${kb}KB）。お客さまのスマホにはすぐ出ます（混みあう時間は数分おくれることがあります）。`}; }
     catch (e) { UI.pub = {s: 'err', m: navigator.onLine === false ? 'ネットにつながっていません。つながる場所でもう一度どうぞ。' : (e.message || '公開できませんでした')}; }
     render();
   },
@@ -1403,7 +1424,7 @@ const A = {
     try {
       const d = await checkPublic();
       if ((d.updated || 0) >= (S.updated || 0)) UI.pub = {s: 'ok', m: `最新のメニュー（${d.items.length}品）が公開されています。`};
-      else UI.pub = {s: 'old', m: `公開中のメニューは ${fmt(d.updated)} の内容です。公開したばかりなら1〜2分待ってからもう一度。そうでなければ「公開する」を。`};
+      else UI.pub = {s: 'old', m: `公開中のメニューは ${fmt(d.updated)} の内容です。公開したばかりなら少し待ってからもう一度。そうでなければ「公開する」を。`};
     } catch (e) { UI.pub = {s: 'err', m: navigator.onLine === false ? 'ネットにつながっていません。' : 'まだ公開されていないか、アドレスが違うようです。'}; }
     render();
   },
@@ -1477,8 +1498,30 @@ const PUBLIC_VIEW = /[?&]m(=|&|$)/.test(location.search);
     if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
     render();
   }
-  if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
+  if ('serviceWorker' in navigator && location.protocol !== 'file:') setupUpdate();
 })();
+
+/* ---------- アプリの更新 ----------
+   開発者が新しい版（sw.js の版番号を上げたもの）を置くと、
+   アプリを開いたとき・画面に戻ったとき・30分ごとに気づいて、自動で新しい版に切りかえる */
+let reloadPending = false;
+function safeToReload() { return !PUBLIC_VIEW && UI.page !== 'kiosk' && !(UI.page === 'edit' && UI.dirty) && !$('#modal').classList.contains('show') && !document.body.matches('.printing'); }
+function reloadNow() { try { sessionStorage.setItem('menu_pwa_page', ['edit', 'kiosk'].includes(UI.page) ? 'menu' : UI.page); } catch (e) {} location.reload(); }
+function tryReload() { if (reloadPending && safeToReload()) reloadNow(); }
+async function setupUpdate() {
+  const hadController = !!navigator.serviceWorker.controller;
+  let reg; try { reg = await navigator.serviceWorker.register('sw.js', {updateViaCache: 'none'}); } catch (e) { return; }
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController) return;            // はじめて入れたときは何もしない
+    if (PUBLIC_VIEW) return;               // お客さまのスマホは次に開いたときに新しい版
+    reloadPending = true;
+    if (safeToReload()) reloadNow(); else toast('新しい版があります。いまの作業が終わると自動で切りかわります');
+  });
+  const check = () => { if (navigator.onLine !== false) reg.update().catch(() => {}); };
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') check(); });
+  setInterval(check, 30 * 60 * 1000);
+}
+try { const p = sessionStorage.getItem('menu_pwa_page'); if (p) { sessionStorage.removeItem('menu_pwa_page'); if (!PUBLIC_VIEW && NAV.some(n => n[0] === p)) UI.page = p; } } catch (e) {}
 </script>
 </body>
 </html>
