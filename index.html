@@ -229,6 +229,9 @@ details.more summary{cursor:pointer;font-weight:700;color:var(--pri);min-height:
 .vfab{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom));z-index:25;border:0;background:#fff;color:#9a3b30;border-radius:999px;padding:10px 18px;min-height:50px;font-weight:700;box-shadow:0 3px 12px rgba(0,0,0,.2);display:flex;align-items:center;gap:6px;cursor:pointer;font-family:system-ui,sans-serif;font-size:15px}
 .vfab.on{background:#9a3b30;color:#fff}
 .vempty{text-align:center;color:#888;padding:40px 10px}
+.vtime{margin:22px 4px 0;padding:12px 14px;border:1px dashed #c9c4b8;border-radius:12px;color:#666;font-size:14px}
+.vtime div+div{margin-top:6px}
+.vtime small{display:block;font-size:12px;color:#999}
 .kx{position:fixed;left:0;bottom:0;width:70px;height:70px;z-index:30;border:0;background:none;color:rgba(0,0,0,.18);font-size:10px;display:flex;align-items:flex-end;justify-content:flex-start;padding:0 0 calc(6px + env(safe-area-inset-bottom)) 6px;cursor:pointer;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 .kx.hold{color:#c00}
 /* 詳しく見る（下から出る） */
@@ -348,6 +351,7 @@ const T = {
   close:    {ja:'閉じる', en:'Close', zh:'關閉', zhs:'关闭', ko:'닫기', th:'ปิด'},
   updated:  {ja:'更新', en:'Updated', zh:'更新', zhs:'更新', ko:'업데이트', th:'อัปเดต'},
   none:     {ja:'該当するメニューはありません', en:'No dishes to show.', zh:'沒有符合的菜色', zhs:'没有符合的菜品', ko:'해당 메뉴가 없습니다', th:'ไม่มีเมนูที่ตรงกัน'},
+  timeOnly: {ja:'この時間だけのメニューです', en:'Served only during these hours', zh:'僅限此時段供應', zhs:'仅限此时段供应', ko:'이 시간에만 제공되는 메뉴입니다', th:'เสิร์ฟเฉพาะช่วงเวลานี้'},
   scan:     {ja:'スマホでメニューを見る', en:'Scan to see the menu', zh:'掃描查看菜單', zhs:'扫码查看菜单', ko:'스캔하여 메뉴 보기', th:'สแกนเพื่อดูเมนู'},
   loadErr:  {ja:'メニューを読み込めませんでした。電波のよい場所でもう一度お試しください。', en:'Could not load the menu. Please try again.', zh:'無法載入菜單，請稍後再試。', zhs:'无法加载菜单，请稍后再试。', ko:'메뉴를 불러올 수 없습니다. 다시 시도해 주세요.', th:'ไม่สามารถโหลดเมนูได้ กรุณาลองอีกครั้ง'},
 };
@@ -579,17 +583,44 @@ const KEY = 'menu_pwa_v1', TOK_KEY = 'menu_pwa_gh';
 function defShop() { return {name:{ja:''}, catch:{}, note:{}, contact:'', color:'#1f3a6e', font:'sans', langs:['ja','en','zh','zhs','ko'], tax:'in', pubUrl:'', dataRepo:''}; }
 function defState() { return {v:1, shop:defShop(), cats:[], items:[], updated:0, pubBuilt:0, bkAt:0}; }
 function fixItem(it) {
-  return {id: String(it.id || uid('i')), cat: it.cat || '', price: Number(it.price) || 0, market: !!it.market,
+  // カテゴリは複数持てる（cats）。前の版の cat（1つだけ）も読める
+  const cats = [...new Set((Array.isArray(it.cats) ? it.cats : (it.cat ? [it.cat] : [])).map(String))];
+  return {id: String(it.id || uid('i')), cats, price: Number(it.price) || 0, market: !!it.market,
     name: it.name || {}, desc: it.desc || {}, tags: (it.tags || []).filter(k => TG[k]), alg: (it.alg || []).filter(k => AG[k]),
     options: (it.options || []).map(o => ({name: o.name || {}, price: Number(o.price) || 0})),
     img: it.img || '', soldout: !!it.soldout, hidden: !!it.hidden};
 }
+/* カテゴリの「出す時間」（例：ランチ 11:00〜14:00）
+   time が無いカテゴリはいつでも出す。終わりが始まりより前（例 22:00〜2:00）は日をまたぐ。
+   時刻はお店のある日本の時間で判断する（海外のスマホの時計がずれていても同じに出る） */
+const HM_RE = /^([01]?\d|2[0-3]):([0-5]\d)$/;
+const hmMin = s => { const m = HM_RE.exec(s || ''); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
+function fixCat(c) {
+  const o = {id: String(c.id || uid('c')), name: c.name || {}};
+  if (Array.isArray(c.ord)) o.ord = c.ord.map(String);
+  if (c.time && hmMin(c.time.from) != null && hmMin(c.time.to) != null && c.time.from !== c.time.to) o.time = {from: c.time.from, to: c.time.to};
+  return o;
+}
+let NOW_TEST = null;   // 確認用（ふだんは null）
+function tokyoMin() {
+  if (NOW_TEST != null) return NOW_TEST;
+  try {
+    const p = new Intl.DateTimeFormat('en-GB', {timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'}).formatToParts(new Date());
+    return Number(p.find(x => x.type === 'hour').value) % 24 * 60 + Number(p.find(x => x.type === 'minute').value);
+  } catch (e) { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); }
+}
+function catOpen(c, now = tokyoMin()) {
+  if (!c || !c.time) return true;
+  const f = hmMin(c.time.from), t = hmMin(c.time.to); if (f == null || t == null) return true;
+  return f < t ? (now >= f && now < t) : (now >= f || now < t);
+}
+const timeTxt = c => c && c.time ? `${c.time.from}〜${c.time.to}` : '';
 function fixState(d) {
   const b = defState(); d = Object.assign(b, d); d.shop = Object.assign(defShop(), d.shop);
   ['name','catch','note'].forEach(k => { if (!d.shop[k] || typeof d.shop[k] !== 'object') d.shop[k] = {}; });
   if (!d.shop.langs.includes('ja')) d.shop.langs.unshift('ja');
   d.shop.langs = LANGS.map(l => l.c).filter(c => d.shop.langs.includes(c));
-  d.cats = (d.cats || []).map(c => ({id: c.id || uid('c'), name: c.name || {}}));
+  d.cats = (d.cats || []).map(fixCat);
   d.items = (d.items || []).map(fixItem);
   return d;
 }
@@ -678,7 +709,7 @@ async function convertOld(d) {
     items.push(fixItem({id: String(o.id || uid('i')), cat, price: o.price, name: L(o.name), desc: L(o.desc), tags: o.tags || [],
       options: (o.options || []).map(x => ({name: L(x.name), price: x.price})), img}));
   }
-  const used = new Set(items.map(i => i.cat));
+  const used = new Set(items.flatMap(i => i.cats));
   cats = cats.filter(c => c.id !== 'cat_other' || used.has('cat_other'));
   // 旧ツールで使われていた言語を有効にする
   const langs = new Set(['ja']);
@@ -723,7 +754,8 @@ function backupName() { const d = new Date(); return `メニュー_バックア�
    ========================================================= */
 async function buildPublic(withImg) {
   const known = new Set(S.cats.map(c => c.id));
-  const items = clone(S.items.filter(i => !i.hidden && known.has(i.cat)));
+  const items = clone(S.items.filter(i => !i.hidden && i.cats.some(c => known.has(c))));
+  items.forEach(i => { i.cats = i.cats.filter(c => known.has(c)); });
   const images = {};
   for (const it of items) {
     if (withImg && it.img && IMG[it.img]) { try { images[it.img] = await shrink(IMG[it.img], 480, 0.72); } catch (e) {} }
@@ -731,7 +763,7 @@ async function buildPublic(withImg) {
     delete it.hidden;
   }
   const shop = clone(S.shop); delete shop.pubUrl; delete shop.dataRepo;
-  return {app: 'menu-pwa-public', v: 1, updated: S.updated || Date.now(), shop, cats: clone(S.cats.filter(c => items.some(i => i.cat === c.id))), items, images};
+  return {app: 'menu-pwa-public', v: 1, updated: S.updated || Date.now(), shop, cats: clone(S.cats.filter(c => items.some(i => i.cats.includes(c.id)))), items, images};
 }
 /* メニューの置き場所（お店ごとのリポジトリ）
    アプリ本体は開発者のリポジトリ1つ。お店のメニュー（menu.json）は、お店ごとの「置き場所リポジトリ」に入れる。
@@ -833,10 +865,18 @@ function render() {
 }
 
 /* ---------- メニュー一覧 ---------- */
-const groupKey = it => S.cats.some(c => c.id === it.cat) ? it.cat : '__none';
+// カテゴリまわりの小さな道具（1つのメニューが複数のカテゴリに入れる）
+const okCats = it => it.cats.filter(id => S.cats.some(c => c.id === id));     // 今あるカテゴリだけ
+const inGroup = (it, g) => g === '__none' ? !okCats(it).length : it.cats.includes(g);
+const catName = id => { const c = S.cats.find(x => x.id === id); return c ? (c.name.ja || '(名前なし)') : ''; };
+// カテゴリの中の並び順（カテゴリごとに別。ランチの並びをかえても、ほかのカテゴリの並びはかわらない）
+function sortIn(c, list) {
+  const o = (c && c.ord) || [], ix = id => { const k = o.indexOf(id); return k < 0 ? 1e9 : k; };
+  return list.map((it, i) => [it, i]).sort((a, b) => ix(a[0].id) - ix(b[0].id) || a[1] - b[1]).map(x => x[0]);
+}
 function pageMenu() {
-  const groups = S.cats.map(c => ({id: c.id, name: c.name.ja || '(名前なし)', items: S.items.filter(i => i.cat === c.id)}));
-  const none = S.items.filter(i => groupKey(i) === '__none');
+  const groups = S.cats.map(c => ({id: c.id, name: (c.name.ja || '(名前なし)') + (c.time ? `　🕐 ${timeTxt(c)}` : ''), items: sortIn(c, S.items.filter(i => i.cats.includes(c.id)))}));
+  const none = S.items.filter(i => inGroup(i, '__none'));
   if (none.length) groups.push({id: '__none', name: '未分類（お客さまには出ません）', items: none});
   const sold = S.items.filter(i => i.soldout).length;
   return `<div class="top"><h1>メニュー <span class="badge gray">${S.items.length}品</span>${sold ? `<span class="badge red">売り切れ ${sold}</span>` : ''}</h1>
@@ -849,19 +889,21 @@ function pageMenu() {
         <label class="btn">${I('upload')}前のツールのデータを読み込む<input type="file" accept=".json,application/json" data-file="restore" hidden></label></div>
         <div class="note">前のパソコン版（メニュー作成ツール V3.2 など）で「保存」したファイル（menu_backup_….json）を読み込めます。</div></div>`}
     ${groups.map(g => `<section class="card grp" data-grp><h2><span>${esc(g.name)} <span class="badge gray">${g.items.length}</span></span>${g.id !== '__none' ? `<button class="btn sm ghost" data-act="newItem" data-cat="${g.id}">${I('plus')}ここに追加</button>` : ''}</h2>
-      ${g.items.length ? g.items.map((it, i) => rowHTML(it, i, g.items.length)).join('') : '<div class="muted small">まだありません</div>'}</section>`).join('')}`;
+      ${g.items.length ? g.items.map((it, i) => rowHTML(it, i, g.items.length, g.id)).join('') : '<div class="muted small">まだありません</div>'}</section>`).join('')}
+    ${S.items.some(i => okCats(i).length > 1) ? '<div class="note">2つ以上のカテゴリに入っているメニューは、それぞれのカテゴリに出ます（「ほかに：」と表示）。どこで直しても同じメニューが直ります。</div>' : ''}`;
 }
 function thumb(it, color) {
   const u = imgUrl(it.img);
   return u ? `<img src="${u}" alt="" loading="lazy">` : `<span class="ph" style="background:${color}">${esc((it.name.ja || '?').slice(0, 1))}</span>`;
 }
-function rowHTML(it, i, n) {
+function rowHTML(it, i, n, g) {
   const lb = S.shop.langs.filter(l => l !== 'ja').map(l => `<span class="lb ${it.name[l] ? 'ok' : 'ng'}" title="${LS[l].jp}">${LS[l].short}</span>`).join('');
   const key = esc(Object.values(it.name).join(' ').toLowerCase());
+  const also = okCats(it).filter(c => c !== g).map(catName);
   return `<div class="it ${it.soldout ? 'sold' : ''} ${it.hidden ? 'hid' : ''}" data-k="${key}">
-    <div class="mv"><button data-act="mv" data-id="${it.id}" data-d="-1" ${i === 0 ? 'disabled' : ''} aria-label="上へ">${I('up')}</button><button data-act="mv" data-id="${it.id}" data-d="1" ${i === n - 1 ? 'disabled' : ''} aria-label="下へ">${I('down')}</button></div>
+    <div class="mv"><button data-act="mv" data-id="${it.id}" data-g="${g}" data-d="-1" ${i === 0 ? 'disabled' : ''} aria-label="上へ">${I('up')}</button><button data-act="mv" data-id="${it.id}" data-g="${g}" data-d="1" ${i === n - 1 ? 'disabled' : ''} aria-label="下へ">${I('down')}</button></div>
     <button class="it-main" data-act="edit" data-id="${it.id}"><span class="th">${thumb(it, S.shop.color)}</span>
-      <span class="it-tx"><b>${esc(it.name.ja || '(名前なし)')}</b><span class="lbs">${it.hidden ? '<span class="badge gray">非表示</span>' : ''}${lb}</span></span>
+      <span class="it-tx"><b>${esc(it.name.ja || '(名前なし)')}</b><span class="lbs">${it.hidden ? '<span class="badge gray">非表示</span>' : ''}${also.length ? `<span class="badge">ほかに：${esc(also.join('・'))}</span>` : ''}${lb}</span></span>
       <span class="pr">${it.market ? '時価' : yen(it.price)}</span></button>
     <button class="sw ${it.soldout ? 'on' : ''}" data-act="sold" data-id="${it.id}">${it.soldout ? '売り切れ中' : '売り切れ'}</button></div>`;
 }
@@ -879,7 +921,9 @@ function pageEdit() {
         <label class="photo">${src ? `<img src="${src}" alt="">` : `<span>${I('camera')}<br>タップして写真をえらぶ<br><small>カメラで撮る・ギャラリーから</small></span>`}<input type="file" accept="image/*" data-file="itemImg" hidden></label>
         ${src ? `<button class="btn sm wide" data-act="rmImg" style="margin-top:8px">${I('x')}写真を外す</button>` : ''}</div>
       <div class="card"><h2>値段・カテゴリ</h2>
-        <label class="f">カテゴリ</label><select class="inp" data-d="cat">${S.cats.map(c => `<option value="${c.id}" ${c.id === d.cat ? 'selected' : ''}>${esc(c.name.ja)}</option>`).join('')}</select>
+        <label class="f">カテゴリ <span class="muted small" style="font-weight:400">いくつでもえらべます（例：「ランチ」と「一品料理」の両方）</span></label>
+        <div class="chips">${S.cats.map(c => `<button class="${d.cats.includes(c.id) ? 'on' : ''}" data-act="ct" data-k="${c.id}">${esc(c.name.ja || '(名前なし)')}</button>`).join('')}
+          <button class="btn sm dash" data-act="addCatHere" style="border-radius:999px">${I('plus')}カテゴリを追加</button></div>
         <label class="f">値段（円）</label><input class="inp num" type="number" inputmode="numeric" data-d="price" data-num value="${d.price}">
         <label class="check"><input type="checkbox" data-d="market" ${d.market ? 'checked' : ''}>時価（値段のかわりに「時価」と出す）</label>
         <label class="check"><input type="checkbox" data-d="soldout" ${d.soldout ? 'checked' : ''}>売り切れ</label>
@@ -908,7 +952,8 @@ async function saveEdit() {
   const d = UI.draft;
   d.name.ja = (d.name.ja || '').trim();
   if (!d.name.ja) { toast('日本語の料理名を入れてください'); const el = document.querySelector('[data-d="name.ja"]'); if (el) el.focus(); return; }
-  if (!S.cats.some(c => c.id === d.cat) && S.cats[0]) d.cat = S.cats[0].id;
+  d.cats = d.cats.filter(id => S.cats.some(c => c.id === id));
+  if (!d.cats.length) { toast('カテゴリを1つ以上えらんでください'); return; }
   if (UI.draftImg !== undefined) {
     const old = d.img;
     if (UI.draftImg) {
@@ -929,19 +974,28 @@ function pageCats() {
   const others = S.shop.langs.filter(l => l !== 'ja');
   return `<div class="top"><h1>カテゴリ</h1><button class="btn pri" data-act="addCat">${I('plus')}カテゴリを追加</button></div>
     <div class="card">${S.cats.length ? S.cats.map((c, i) => {
-      const n = S.items.filter(x => x.cat === c.id).length, miss = others.filter(l => !c.name[l]);
+      const n = S.items.filter(x => x.cats.includes(c.id)).length, miss = others.filter(l => !c.name[l]);
       return `<div class="crow"><div class="mv"><button data-act="mvCat" data-i="${i}" data-d="-1" ${i === 0 ? 'disabled' : ''}>${I('up')}</button><button data-act="mvCat" data-i="${i}" data-d="1" ${i === S.cats.length - 1 ? 'disabled' : ''}>${I('down')}</button></div>
-        <div class="grow"><b>${esc(c.name.ja || '(名前なし)')}</b> <span class="badge gray">${n}品</span>
+        <div class="grow"><b>${esc(c.name.ja || '(名前なし)')}</b> <span class="badge gray">${n}品</span>${c.time ? ` <span class="badge ${catOpen(c) ? '' : 'warn'}">🕐 ${timeTxt(c)}${catOpen(c) ? '（いま表示中）' : '（いまは出ていません）'}</span>` : ''}
           <div class="small muted">${others.map(l => c.name[l] ? esc(c.name[l]) : '').filter(Boolean).join(' / ')}${miss.length ? ` <span class="badge warn">未翻訳 ${miss.map(l => LS[l].short).join('・')}</span>` : ''}</div></div>
         <button class="btn sm" data-act="editCat" data-id="${c.id}">${I('edit')}直す</button><button class="btn sm" data-act="delCat" data-id="${c.id}" aria-label="削除">${I('trash')}</button></div>`;
     }).join('') : '<div class="empty">カテゴリがまだありません</div>'}</div>
-    <div class="note">お客さまの画面・印刷では、この順番で並びます。メニューが1つもないカテゴリは表示されません。</div>`;
+    <div class="note">お客さまの画面・印刷では、この順番で並びます。メニューが1つもないカテゴリは表示されません。<br>
+      1つのメニューを複数のカテゴリに入れられます。たとえば「ランチ」カテゴリを作って、昼に出すメニューに「ランチ」も付けると、ランチだけの印刷もできます（印刷・PDF の画面で「ランチ」だけをえらぶ）。</div>`;
+}
+function catTimeHTML() {
+  const tm = UI.mdraft.time;
+  return `<label class="f">お客さまの画面に出す時間</label>
+    <div class="seg"><button class="${tm ? '' : 'on'}" data-act="mTime" data-v="">いつでも出す</button><button class="${tm ? 'on' : ''}" data-act="mTime" data-v="1">時間を決める</button></div>
+    ${tm ? `<div class="row" style="margin-top:8px"><input class="inp" type="time" data-m="time.from" value="${esc(tm.from)}" style="flex:1 1 120px"><span>〜</span><input class="inp" type="time" data-m="time.to" value="${esc(tm.to)}" style="flex:1 1 120px"></div>
+      <div class="note">この時間のあいだだけ、QRコードのメニューとお客さま表示に出ます（日本の時間で判断）。ほかのカテゴリにも入っているメニューは、そちらにはいつでも出ます。印刷とこの管理画面にはいつでも出ます。<br>夜中をまたぐとき（例 22:00〜2:00）もそのまま入れられます。</div>` : ''}`;
 }
 function catModal(c) {
   const isNew = !c; UI.mdraft = c ? clone(c) : {id: uid('c'), name: {}};
   openModal(`<h2>${isNew ? 'カテゴリを追加' : 'カテゴリの名前'}</h2>
     ${S.shop.langs.map(l => `<label class="f">${LS[l].label}${l !== 'ja' ? ` <span class="muted small">${LS[l].jp}</span><button class="btn sm ghost" data-act="gtm" data-l="${l}">${I('ext')}訳す</button>` : '（必須）'}</label>
       <input class="inp" data-m="name.${l}" value="${esc(UI.mdraft.name[l] || '')}" placeholder="${l === 'ja' ? '例：お飲み物' : ''}">`).join('')}
+    <div id="catTime">${catTimeHTML()}</div>
     <div class="actbar end" style="margin-top:16px"><button class="btn" data-act="closeM">やめる</button><button class="btn pri" data-act="saveCat">${I('check')}保存</button></div>`);
   setTimeout(() => { const el = document.querySelector('[data-m="name.ja"]'); if (el && isNew) el.focus(); }, 50);
 }
@@ -952,7 +1006,9 @@ function transFields() {
   const add = (grp, label, obj, multi) => { if (obj && (obj.ja || '').trim()) f.push({grp, label, obj, multi}); };
   add('お店', '店名', S.shop.name); add('お店', 'キャッチコピー', S.shop.catch); add('お店', 'お知らせ', S.shop.note, true);
   S.cats.forEach(c => add('カテゴリ', 'カテゴリ名', c.name));
-  S.cats.forEach(c => S.items.filter(i => i.cat === c.id).forEach(it => {
+  const seen = new Set();   // 複数のカテゴリに入っているメニューは1回だけ
+  S.cats.forEach(c => sortIn(c, S.items.filter(i => i.cats.includes(c.id))).forEach(it => {
+    if (seen.has(it.id)) return; seen.add(it.id);
     add(c.name.ja, '料理名', it.name);
     add(c.name.ja, `説明（${it.name.ja}）`, it.desc, true);
     it.options.forEach(o => add(c.name.ja, `オプション（${it.name.ja}）`, o.name));
@@ -1026,6 +1082,9 @@ function pagePrint() {
   <div class="pr-grid"><div>
     <div class="card"><h2>言語</h2>${seg('lang', langs.map(l => [l, LS[l].label]))}
       <label class="f">下に小さく添える言語</label>${seg('lang2', [['', p.lang === 'ja' ? 'なし' : 'なし（日本語名だけ添える）'], ...langs.filter(l => l !== p.lang && !(p.lang !== 'ja' && l === 'ja')).map(l => [l, LS[l].label])])}</div>
+    <div class="card"><h2>載せるカテゴリ <small>${p.cats ? `${p.cats.filter(id => S.cats.some(c => c.id === id)).length}つ` : 'すべて'}</small></h2>
+      <div class="chips">${S.cats.map(c => `<button class="${!p.cats || p.cats.includes(c.id) ? 'on' : ''}" data-act="prCat" data-k="${c.id}">${esc(c.name.ja || '(名前なし)')}</button>`).join('')}</div>
+      <div class="actbar" style="margin-top:8px"><button class="btn sm" data-act="prCatAll">すべて</button><span class="small muted">例：「ランチ」だけをえらぶと、ランチのメニュー表になります</span></div></div>
     <div class="card"><h2>形</h2>${seg('layout', [['photo1', '写真・大'], ['photo2', '写真・2列'], ['text', '文字だけ']])}
       <label class="f">文字の大きさ</label>${seg('size', [['n', 'ふつう'], ['l', '大きめ']])}
       ${ck('desc', '説明を載せる')}${ck('alg', 'アレルギーを載せる')}${ck('sold', '売り切れ中のものも載せる')}${ck('qr', 'スマホ用のQRコードを下に入れる' + (qrTarget() ? '' : '（QR・公開で置き場所を入れると使えます）'), !qrTarget())}</div>
@@ -1045,7 +1104,7 @@ function printMenuHTML() {
   const p = UI.pr, sh = S.shop, L = p.lang, L2 = p.lang2 || (L !== 'ja' ? 'ja' : '');
   const sub = o => { if (!L2 || !o) return ''; const a = tr(o, L), b = L2 === 'ja' ? (o.ja || '') : (o[L2] || ''); return b && b !== a ? b : ''; };
   const items = S.items.filter(i => !i.hidden && (p.sold || !i.soldout));
-  const secs = S.cats.map(c => ({c, items: items.filter(i => i.cat === c.id)})).filter(g => g.items.length);
+  const secs = S.cats.filter(c => !p.cats || p.cats.includes(c.id)).map(c => ({c, items: sortIn(c, items.filter(i => i.cats.includes(c.id)))})).filter(g => g.items.length);
   const cls = p.layout === 'photo1' ? 'c1' : p.layout === 'photo2' ? 'c2' : 'txt';
   const both = k => [t(k, L), L2 ? t(k, L2) : ''].filter((x, i, a) => x && a.indexOf(x) === i).join(' / ');
   const itemHTML = it => {
@@ -1169,7 +1228,10 @@ function viewerHTML() {
   const avoid = new Set(VS.avoid);
   const vis = D.items.filter(i => !i.hidden);
   const blocked = i => i.alg.some(a => avoid.has(a));
-  const groups = D.cats.map(c => ({c, items: vis.filter(i => i.cat === c.id && !blocked(i))})).filter(g => g.items.length);
+  const now = tokyoMin();
+  const groups = D.cats.filter(c => catOpen(c, now)).map(c => ({c, items: sortIn(c, vis.filter(i => i.cats.includes(c.id) && !blocked(i)))})).filter(g => g.items.length);
+  // 時間外でいまは出していないカテゴリ（「ランチ 11:00〜14:00」と小さく知らせる）
+  const closed = D.cats.filter(c => !catOpen(c, now) && vis.some(i => i.cats.includes(c.id)));
   const nHidden = vis.filter(blocked).length;
   const hasAlg = vis.some(i => i.alg.length);
   const nm = tr(sh.name, L) || 'Menu';
@@ -1191,6 +1253,7 @@ function viewerHTML() {
       ${nHidden ? `<div class="vnote" style="border-color:#9a3b30">${nHidden}${esc(t('hiding', L))} <button class="btn sm" data-act="vClear" style="margin-left:8px">${esc(t('clear', L))}</button></div>` : ''}
       ${groups.map(g => `<section class="vsec" id="vc-${esc(g.c.id)}"><h2>${esc(tr(g.c.name, L))}${L !== 'ja' && g.c.name.ja && g.c.name.ja !== tr(g.c.name, L) ? `<small>${esc(g.c.name.ja)}</small>` : ''}</h2>
         <div class="vgrid">${g.items.map(card).join('')}</div></section>`).join('') || `<div class="vempty">${esc(t('none', L))}</div>`}
+      ${closed.length ? `<div class="vtime">${closed.map(c => `<div>🕐 ${esc(tr(c.name, L))}　${esc(timeTxt(c).replace('〜', ' – '))}<small>${esc(t('timeOnly', L))}</small></div>`).join('')}</div>` : ''}
     </div>
     <footer class="vfoot">${sh.contact ? `<p>${esc(sh.contact)}</p>` : ''}
       ${sh.tax !== 'none' ? `<p>${esc(t(sh.tax === 'out' ? 'taxOut' : 'taxIn', L))}</p>` : ''}<p>${esc(t('photo', L))}</p>
@@ -1198,6 +1261,14 @@ function viewerHTML() {
     ${hasAlg ? `<button class="vfab ${avoid.size ? 'on' : ''}" data-act="vFilter">${I('filter')}${esc(t('allergens', L))}${avoid.size ? ` (${avoid.size})` : ''}</button>` : ''}
     ${VS.kiosk ? '<button class="kx" id="kx">長押しで<br>もどる</button>' : ''}</div>`;
 }
+// ランチの時間になった・終わったときに、お客さまの画面を自動で入れかえる
+let openKey = '';
+setInterval(() => {
+  if (UI.page !== 'kiosk' || !VD) return;
+  const k = VD.cats.map(c => catOpen(c) ? 1 : 0).join('');
+  if (openKey && k !== openKey) { const y = window.scrollY; render(); window.scrollTo(0, y); }
+  openKey = k;
+}, 30000);
 let vScrollBound = false;
 function afterViewer() {
   const h = document.querySelector('.vh');
@@ -1311,7 +1382,7 @@ function leaveEditOk() { return UI.page !== 'edit' || !UI.dirty || confirm('直�
 function go(p) { if (!leaveEditOk()) return; UI.page = p; UI.dirty = false; UI.pub = (p === 'qr') ? UI.pub : null; render(); window.scrollTo(0, 0); tryReload(); }
 function newDraft(cat) {
   if (!S.cats.length) { S.cats.push({id: uid('c'), name: {ja: 'おすすめ', en: 'Recommended', zh: '推薦', zhs: '推荐', ko: '추천', th: 'แนะนำ'}}); save(); }
-  return fixItem({id: uid('i'), cat: cat || S.cats[0].id, price: 0});
+  return fixItem({id: uid('i'), cats: [cat || S.cats[0].id], price: 0});
 }
 const findItem = id => S.items.find(i => i.id === id);
 
@@ -1329,12 +1400,17 @@ const A = {
   sold: el => { const it = findItem(el.dataset.id); if (!it) return; it.soldout = !it.soldout; save(); render(); toast(it.soldout ? `「${it.name.ja}」を売り切れにしました` : `「${it.name.ja}」の売り切れを戻しました`); },
   clearSold: () => { if (!confirm('売り切れをすべて戻しますか？')) return; S.items.forEach(i => i.soldout = false); save(); render(); },
   mv: el => {
-    const it = findItem(el.dataset.id), k = groupKey(it), sib = S.items.filter(x => groupKey(x) === k);
-    const j = sib.indexOf(it) + Number(el.dataset.d); if (j < 0 || j >= sib.length) return;
-    const a = S.items.indexOf(it), b = S.items.indexOf(sib[j]); [S.items[a], S.items[b]] = [S.items[b], S.items[a]]; save(); render();
+    const it = findItem(el.dataset.id), g = el.dataset.g, c = S.cats.find(x => x.id === g);
+    const sib = c ? sortIn(c, S.items.filter(x => x.cats.includes(g))) : S.items.filter(x => inGroup(x, '__none'));
+    const i = sib.indexOf(it), j = i + Number(el.dataset.d); if (i < 0 || j < 0 || j >= sib.length) return;
+    if (c) { [sib[i], sib[j]] = [sib[j], sib[i]]; c.ord = sib.map(x => x.id); }
+    else { const a = S.items.indexOf(it), b = S.items.indexOf(sib[j]); [S.items[a], S.items[b]] = [S.items[b], S.items[a]]; }
+    save(); render();
   },
   rmImg: () => { UI.draftImg = ''; UI.dirty = true; render(); },
   tg: el => { const a = UI.draft.tags, k = el.dataset.k; UI.draft.tags = a.includes(k) ? a.filter(x => x !== k) : [...a, k]; el.classList.toggle('on'); UI.dirty = true; },
+  ct: el => { const a = UI.draft.cats, k = el.dataset.k; UI.draft.cats = a.includes(k) ? a.filter(x => x !== k) : [...a, k]; el.classList.toggle('on'); UI.dirty = true; },
+  addCatHere: () => { UI.catForDraft = true; catModal(null); },
   ag: el => { const a = UI.draft.alg, k = el.dataset.k; UI.draft.alg = a.includes(k) ? a.filter(x => x !== k) : [...a, k]; el.classList.toggle('on'); UI.dirty = true; },
   addOpt: () => { UI.draft.options.push({name: {}, price: 0}); UI.dirty = true; render(); const els = document.querySelectorAll('[data-d$=".name.ja"][data-d^="options."]'); if (els.length) els[els.length - 1].focus(); },
   rmOpt: el => { UI.draft.options.splice(Number(el.dataset.i), 1); UI.dirty = true; render(); },
@@ -1352,29 +1428,46 @@ const A = {
     UI.draft = d; UI.draftImg = src || undefined; UI.dirty = true; render(); window.scrollTo(0, 0); toast('複製しました。名前を直して保存してください');
   },
   // カテゴリ
-  addCat: () => catModal(null),
-  editCat: el => catModal(S.cats.find(c => c.id === el.dataset.id)),
+  addCat: () => { UI.catForDraft = false; catModal(null); },
+  editCat: el => { UI.catForDraft = false; catModal(S.cats.find(c => c.id === el.dataset.id)); },
   gtm: el => openTranslate(UI.mdraft.name.ja || '', el.dataset.l),
+  mTime: el => { UI.mdraft.time = el.dataset.v ? (UI.mdraft.time || {from: '11:00', to: '14:00'}) : null; $('#catTime').innerHTML = catTimeHTML(); },
   saveCat: () => {
     const c = UI.mdraft; c.name.ja = (c.name.ja || '').trim(); if (!c.name.ja) { toast('日本語の名前を入れてください'); return; }
+    if (c.time) {
+      if (hmMin(c.time.from) == null || hmMin(c.time.to) == null) { toast('はじまりと終わりの時間を入れてください'); return; }
+      if (c.time.from === c.time.to) { toast('はじまりと終わりが同じ時間です'); return; }
+    } else delete c.time;
     const i = S.cats.findIndex(x => x.id === c.id); if (i >= 0) S.cats[i] = c; else S.cats.push(c);
-    save(); closeModal(); render();
+    if (i < 0 && UI.catForDraft && UI.page === 'edit' && UI.draft) { UI.draft.cats.push(c.id); UI.dirty = true; }
+    UI.catForDraft = false; save(); closeModal(); render();
   },
   mvCat: el => { const i = Number(el.dataset.i), j = i + Number(el.dataset.d); if (j < 0 || j >= S.cats.length) return; [S.cats[i], S.cats[j]] = [S.cats[j], S.cats[i]]; save(); render(); },
   delCat: el => {
-    const c = S.cats.find(x => x.id === el.dataset.id), n = S.items.filter(i => i.cat === c.id).length, others = S.cats.filter(x => x.id !== c.id);
-    if (!n) { if (confirm(`カテゴリ「${c.name.ja}」を削除しますか？`)) { S.cats = others; save(); render(); } return; }
-    openModal(`<h2>「${esc(c.name.ja)}」を削除</h2><p>このカテゴリには <b>${n}品</b> のメニューがあります。どうしますか？</p>
+    const c = S.cats.find(x => x.id === el.dataset.id), others = S.cats.filter(x => x.id !== c.id);
+    const inIt = S.items.filter(i => i.cats.includes(c.id)), only = inIt.filter(i => okCats(i).length === 1), n = only.length;
+    const rest = inIt.length - n, restMsg = rest ? `ほかのカテゴリにも入っている ${rest}品 は、そのまま残ります（このカテゴリから外れるだけ）。` : '';
+    if (!n) {
+      if (confirm(`カテゴリ「${c.name.ja}」を削除しますか？` + (restMsg ? '\n' + restMsg : ''))) { S.items.forEach(i => { i.cats = i.cats.filter(x => x !== c.id); }); S.cats = others; save(); render(); }
+      return;
+    }
+    openModal(`<h2>「${esc(c.name.ja)}」を削除</h2><p>このカテゴリ<b>だけ</b>に入っているメニューが <b>${n}品</b> あります。どうしますか？</p>${restMsg ? `<p class="small muted">${restMsg}</p>` : ''}
       ${others.length ? `<label class="f">メニューの移し先</label><select class="inp" id="mvTo">${others.map(o => `<option value="${o.id}">${esc(o.name.ja)}</option>`).join('')}</select>
       <button class="btn pri wide" data-act="delCatMove" data-id="${c.id}">メニューを移してから、カテゴリを削除</button>` : ''}
       <button class="btn wide" data-act="delCatAll" data-id="${c.id}" style="color:var(--bad)">メニューもいっしょに削除</button>
       <button class="btn wide" data-act="closeM">やめる</button>`);
   },
-  delCatMove: el => { const to = $('#mvTo').value; S.items.forEach(i => { if (i.cat === el.dataset.id) i.cat = to; }); S.cats = S.cats.filter(c => c.id !== el.dataset.id); save(); closeModal(); render(); toast('移して削除しました'); },
+  delCatMove: el => {
+    const id = el.dataset.id, to = $('#mvTo').value;
+    S.items.forEach(i => { if (!i.cats.includes(id)) return; const only = okCats(i).length === 1; i.cats = i.cats.filter(x => x !== id); if (only && !i.cats.includes(to)) i.cats.push(to); });
+    S.cats = S.cats.filter(c => c.id !== id); save(); closeModal(); render(); toast('移して削除しました');
+  },
   delCatAll: el => {
-    if (!confirm('メニューもいっしょに削除します。よろしいですか？')) return;
+    if (!confirm('このカテゴリだけに入っているメニューもいっしょに削除します。よろしいですか？')) return;
     const id = el.dataset.id, oldC = clone(S.cats), oldI = clone(S.items);
-    S.items = S.items.filter(i => i.cat !== id); S.cats = S.cats.filter(c => c.id !== id); save(); closeModal(); render();
+    S.items = S.items.filter(i => !(i.cats.includes(id) && okCats(i).length === 1));
+    S.items.forEach(i => { i.cats = i.cats.filter(x => x !== id); });
+    S.cats = S.cats.filter(c => c.id !== id); save(); closeModal(); render();
     toast('削除しました', () => { S.cats = oldC; S.items = oldI; save(); render(); });
   },
   closeM: () => closeModal(),
@@ -1397,6 +1490,14 @@ const A = {
   },
   // 印刷
   pr: el => { const k = el.dataset.k; UI.pr[k] = el.dataset.v; render(); },
+  prCat: el => {
+    const all = S.cats.map(c => c.id), k = el.dataset.k;
+    let cur = UI.pr.cats ? UI.pr.cats.filter(id => all.includes(id)) : all.slice();
+    cur = cur.includes(k) ? cur.filter(x => x !== k) : [...cur, k];
+    if (!cur.length) { toast('1つ以上えらんでください'); return; }
+    UI.pr.cats = cur.length === all.length ? null : cur; render();
+  },
+  prCatAll: () => { UI.pr.cats = null; render(); },
   printMenu: () => doPrint(printMenuHTML(), '@page{size:A4;margin:10mm}'),
   printPop: () => doPrint(popHTML(), '@page{size:A4;margin:0}'),
   qrPng: () => qrPng(),
@@ -1461,7 +1562,6 @@ document.addEventListener('input', e => {
 });
 document.addEventListener('change', async e => {
   const el = e.target;
-  if (el.dataset.d === 'cat' && UI.draft) { UI.draft.cat = el.value; UI.dirty = true; }
   if (el.dataset.d != null && el.type === 'checkbox' && UI.draft) { setPath(UI.draft, el.dataset.d, el.checked); UI.dirty = true; }
   if (el.hasAttribute('data-url')) { S.shop.pubUrl = normUrl(el.value); UI.pub = null; save(false); render(); }
   if (el.hasAttribute('data-repo')) { const r = parseRepo(el.value); S.shop.dataRepo = r ? r.full : el.value.trim(); UI.pub = null; S.pubBuilt = 0; S.pubAt = 0; save(false); render(); }
